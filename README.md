@@ -98,30 +98,41 @@ The MVP must work with TalkBack and VoiceOver, support dynamic text without clip
 
 ## Current status
 
-**Documentation and backlog scaffold only.** No Flutter project, app binary, automated test result, signed package, or store release exists yet.
+**Flutter foundation scaffold.** The repository now pins Flutter 3.47.1 and
+contains Android/iOS projects, a truthful local-first empty state, strict
+analysis, smoke/semantics tests, architecture import rules, dependency-license
+inventory, and CI quality/platform build jobs. Domain scheduling, persistence,
+and user workflows remain backlog work; no signed package or store release is
+claimed.
 
 ### Milestones
 
-1. Reproducible Flutter skeleton and CI
+1. Reproducible Flutter skeleton and CI — scaffolded; CI is the platform-build gate
 2. Tested local domain and scheduling engine
 3. Accessible due/completion workflow
 4. Asset history, search, and attachments
 5. Backup/restore, CSV export, and privacy controls
 6. Platform builds and release-readiness checks
 
-## Development quickstart (planned)
+## Development quickstart
 
-Prerequisites: Flutter stable, Dart SDK supplied by Flutter, Android Studio/SDK for Android, and Xcode on macOS for iOS.
+Use the pinned Flutter **3.47.1** stable SDK (Dart 3.13.1). Android development
+requires Java 17 and an Android SDK; iOS builds require macOS and Xcode.
 
 ```bash
-flutter doctor
-flutter pub get
+flutter --version
+flutter doctor -v
+flutter pub get --enforce-lockfile
+dart format --output=none --set-exit-if-changed .
 flutter analyze
-flutter test
+flutter test --coverage
+dart run tool/check_dependency_licenses.dart --output build/reports/dependency-licenses.txt
 flutter run
 ```
 
-These commands describe the intended workflow; they are not yet runnable because the Flutter skeleton has not been created.
+See [bootstrap and verification](docs/bootstrap.md) for platform build commands
+and host limitations, and [architecture boundaries](docs/architecture.md) for
+the enforced dependency rules.
 
 ## License
 
