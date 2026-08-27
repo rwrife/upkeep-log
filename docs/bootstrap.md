@@ -39,6 +39,22 @@ Build the unsigned debug APK with:
 flutter build apk --debug
 ```
 
+The Gradle wrapper JAR, distribution checksum, and dependency verification
+metadata are committed so CI verifies downloaded Gradle, plugin, and Maven
+artifacts. When an intentional Android dependency change needs new checksums,
+regenerate them on a supported host and review the complete XML diff before
+committing:
+
+```bash
+flutter pub get --enforce-lockfile
+cd android
+./gradlew --write-verification-metadata sha256 assembleDebug
+./gradlew --dependency-verification strict help
+```
+
+Do not regenerate verification metadata as part of a normal CI build; CI must
+consume the reviewed committed checksums and fail closed on unknown artifacts.
+
 iOS development and builds require macOS with Xcode. Build without signing with:
 
 ```bash
