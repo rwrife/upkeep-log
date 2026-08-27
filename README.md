@@ -100,7 +100,7 @@ The MVP must work with TalkBack and VoiceOver, support dynamic text without clip
 
 **Flutter foundation scaffold.** The repository now pins Flutter 3.47.1 and
 contains Android/iOS projects, a truthful local-first empty state, strict
-analysis, smoke/semantics tests, architecture import rules, dependency-license
+analysis, smoke/semantics tests, architecture import rules, vulnerability/license
 inventory, and CI quality/platform build jobs. Domain scheduling, persistence,
 and user workflows remain backlog work; no signed package or store release is
 claimed.

@@ -24,11 +24,15 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('empty state fits a narrow phone viewport', (
+  testWidgets('empty state fits a narrow phone at large text scale', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(320, 568));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(() {
+      tester.binding.setSurfaceSize(null);
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+    });
 
     await tester.pumpWidget(const UpkeepLogApp());
     await tester.pumpAndSettle();

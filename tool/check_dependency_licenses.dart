@@ -6,8 +6,6 @@ const Set<String> _licenseNames = <String>{
   'LICENSE',
   'LICENSE.md',
   'LICENSE.txt',
-  'NOTICE',
-  'NOTICE.txt',
 };
 
 Future<void> main(List<String> arguments) async {
@@ -52,27 +50,40 @@ Future<void> main(List<String> arguments) async {
     );
     final List<File> licenses = _findLicenses(Directory.fromUri(rootUri));
     if (licenses.isEmpty) {
-      failures.add('$name: no license or notice file in package/SDK roots');
+      failures.add('$name: no license file in package/SDK roots');
       continue;
     }
 
-    final File license = licenses.first;
-    final String text = await license.readAsString();
-    final String normalized = text.toUpperCase();
-    if (normalized.contains('GNU AFFERO GENERAL PUBLIC LICENSE') ||
-        normalized.contains('GNU GENERAL PUBLIC LICENSE')) {
-      failures.add('$name: copyleft license requires owner review');
+    final List<String> licenseTexts = <String>[];
+    for (final File license in licenses) {
+      licenseTexts.add(await license.readAsString());
+    }
+    final Set<String>? approvedLicenses = approvedLicenseIds(
+      name,
+      licenseTexts,
+    );
+    if (approvedLicenses == null) {
+      failures.add(
+        '$name: one or more license files are outside the approved set',
+      );
       continue;
     }
 
-    final String summary = text
-        .split(RegExp(r'\r?\n'))
+    final List<String> sortedLicenses = approvedLicenses.toList()..sort();
+    final List<String> licenseFiles = licenses
+        .map((File license) => _basename(license.path))
+        .toList()
+      ..sort();
+    final String summary = licenseTexts
+        .expand((String text) => text.split(RegExp(r'\r?\n')))
         .map((String line) => line.trim())
         .firstWhere(
           (String line) => line.isNotEmpty,
           orElse: () => 'license text',
         );
-    report.add('$name\t${_basename(license.path)}\t$summary');
+    report.add(
+      '$name\t${sortedLicenses.join('+')}\t${licenseFiles.join('+')}\t$summary',
+    );
   }
 
   report.sort();
@@ -81,6 +92,7 @@ Future<void> main(List<String> arguments) async {
   await output.writeAsString(
     <String>[
       'Upkeep Log dependency license inventory',
+      'Approved set: Apache-2.0, BSD, MIT, Flutter SDK composite',
       'Generated from .dart_tool/package_config.json',
       '',
       ...report,
@@ -98,6 +110,56 @@ Future<void> main(List<String> arguments) async {
   if (failures.isNotEmpty) {
     exitCode = 1;
   }
+}
+
+/// Returns all approved identifiers, or null when any license is denied/unknown.
+Set<String>? approvedLicenseIds(
+  String packageName,
+  Iterable<String> licenseTexts,
+) {
+  final Set<String> approved = <String>{};
+  for (final String text in licenseTexts) {
+    final String? identifier = approvedLicenseId(packageName, text);
+    if (identifier == null) {
+      return null;
+    }
+    approved.add(identifier);
+  }
+  return approved.isEmpty ? null : approved;
+}
+
+/// Returns the approved license identifier, or null for denied/unknown text.
+String? approvedLicenseId(String packageName, String text) {
+  final String normalized = text.toUpperCase();
+  const List<String> deniedMarkers = <String>[
+    'GNU AFFERO GENERAL PUBLIC LICENSE',
+    'GNU GENERAL PUBLIC LICENSE',
+    'GNU LESSER GENERAL PUBLIC LICENSE',
+    'MOZILLA PUBLIC LICENSE',
+    'COMMON DEVELOPMENT AND DISTRIBUTION LICENSE',
+    'ECLIPSE PUBLIC LICENSE',
+    'EUROPEAN UNION PUBLIC LICENCE',
+  ];
+  if (deniedMarkers.any(normalized.contains)) {
+    return null;
+  }
+  if (normalized.contains('APACHE LICENSE') &&
+      normalized.contains('VERSION 2.0')) {
+    return 'Apache-2.0';
+  }
+  if (normalized.contains('PERMISSION IS HEREBY GRANTED, FREE OF CHARGE')) {
+    return 'MIT';
+  }
+  if (normalized.contains(
+    'REDISTRIBUTION AND USE IN SOURCE AND BINARY FORMS',
+  )) {
+    return 'BSD';
+  }
+  if (packageName == 'sky_engine' &&
+      normalized.contains('VULKAN-VALIDATION-LAYERS')) {
+    return 'Flutter-SDK-composite';
+  }
+  return null;
 }
 
 List<File> _findLicenses(Directory packageRoot) {
