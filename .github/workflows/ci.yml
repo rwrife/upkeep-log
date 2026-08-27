@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.47.1
+
+jobs:
+  quality:
+    name: Format, analyze, and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Report toolchain
+        run: flutter --version
+      - name: Resolve locked dependencies
+        run: |
+          flutter pub get --enforce-lockfile
+          git diff --exit-code
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed .
+      - name: Analyze
+        run: flutter analyze
+      - name: Test with coverage
+        run: flutter test --coverage
+      - name: Review dependency licenses
+        run: dart run tool/check_dependency_licenses.dart --output build/reports/dependency-licenses.txt
+      - name: Upload quality reports
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: quality-reports
+          path: |
+            coverage/lcov.info
+            build/reports/dependency-licenses.txt
+          if-no-files-found: error
+
+  android:
+    name: Android debug build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Validate Gradle wrapper inputs
+        run: |
+          test -x android/gradlew
+          echo "b3a875ddc1f044746e1b1a55f645584505f4a10438c1afea9f15e92a7c42ec13  android/gradle/wrapper/gradle-wrapper.jar" | sha256sum --check --strict
+      - run: flutter pub get --enforce-lockfile
+      - name: Validate committed Gradle dependency verification metadata
+        run: |
+          test "$(git ls-files -s -- android/gradle/verification-metadata.xml | cut -d' ' -f1)" = "100644"
+          test ! -L android/gradle/verification-metadata.xml
+          cd android
+          ./gradlew --dependency-verification strict help
+      - run: flutter build apk --debug
+
+  ios:
+    name: iOS no-codesign debug build
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter build ios --debug --no-codesign
+
+  dependency-audit:
+    name: Dependency vulnerability and license review
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Scan the regular pinned lockfile for known vulnerabilities
+        run: |
+          test "$(git ls-files -s -- pubspec.lock | cut -d' ' -f1)" = "100644"
+          test ! -L pubspec.lock
+          curl --fail --location --retry 3 \
+            https://github.com/google/osv-scanner/releases/download/v2.5.0/osv-scanner_linux_amd64 \
+            --output /tmp/osv-scanner
+          echo "edcfc41d257db36148f065055655fe3fcfc434b0b423ea67468a84c207524e0c  /tmp/osv-scanner" | sha256sum --check --strict
+          chmod 700 /tmp/osv-scanner
+          /tmp/osv-scanner --version
+          /tmp/osv-scanner scan source --lockfile=pubspec.lock
+      - name: Review dependency freshness
+        run: |
+          mkdir -p build/reports
+          dart pub outdated --no-dependency-overrides --no-prereleases | tee build/reports/dependency-outdated.txt
+      - name: Review dependency licenses
+        run: dart run tool/check_dependency_licenses.dart --output build/reports/dependency-licenses.txt
+      - name: Upload dependency reports
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-reports
+          path: build/reports/dependency-*.txt
+          if-no-files-found: error
