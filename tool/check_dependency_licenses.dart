@@ -70,10 +70,9 @@ Future<void> main(List<String> arguments) async {
     }
 
     final List<String> sortedLicenses = approvedLicenses.toList()..sort();
-    final List<String> licenseFiles = licenses
-        .map((File license) => _basename(license.path))
-        .toList()
-      ..sort();
+    final List<String> licenseFiles =
+        licenses.map((File license) => _basename(license.path)).toList()
+          ..sort();
     final String summary = licenseTexts
         .expand((String text) => text.split(RegExp(r'\r?\n')))
         .map((String line) => line.trim())
