@@ -98,17 +98,18 @@ The MVP must work with TalkBack and VoiceOver, support dynamic text without clip
 
 ## Current status
 
-**Flutter foundation scaffold.** The repository now pins Flutter 3.47.1 and
-contains Android/iOS projects, a truthful local-first empty state, strict
-analysis, smoke/semantics tests, architecture import rules, vulnerability/license
-inventory, and CI quality/platform build jobs. Domain scheduling, persistence,
-and user workflows remain backlog work; no signed package or store release is
-claimed.
+**Scheduling and persistence foundation.** The repository pins Flutter 3.47.1
+and now includes documented immutable domain entities, deterministic date-only
+recurrence, application repository ports, and a schema-v1 Drift/SQLite adapter
+with append-only completion revisions and migration/reopen tests. The app still
+shows the local-first empty state: task editing, notifications, attachments on
+disk, exports, and other user workflows remain backlog work. No signed package
+or store release is claimed.
 
 ### Milestones
 
 1. Reproducible Flutter skeleton and CI — scaffolded; CI is the platform-build gate
-2. Tested local domain and scheduling engine
+2. Tested local domain, scheduling engine, and schema-v1 persistence — complete
 3. Accessible due/completion workflow
 4. Asset history, search, and attachments
 5. Backup/restore, CSV export, and privacy controls
@@ -123,6 +124,7 @@ requires Java 17 and an Android SDK; iOS builds require macOS and Xcode.
 flutter --version
 flutter doctor -v
 flutter pub get --enforce-lockfile
+dart run build_runner build
 dart format --output=none --set-exit-if-changed .
 flutter analyze
 flutter test --coverage

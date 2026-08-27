@@ -20,6 +20,7 @@ without updating all pins and the lockfile in a reviewed change.
 flutter --version
 flutter doctor -v
 flutter pub get --enforce-lockfile
+dart run build_runner build
 dart format --output=none --set-exit-if-changed .
 flutter analyze
 flutter test --coverage
@@ -69,6 +70,7 @@ build evidence comes from the x64 Linux and macOS GitHub-hosted CI jobs unless a
 matching official host toolchain is available. Linux cannot perform the Xcode
 build, and a machine without the Android SDK cannot perform the APK build.
 
-The app currently launches only the truthful local-first empty state. Home,
-asset, task, persistence, notification, and export behavior belongs to later
-issues and is not simulated by this foundation.
+The app currently launches the local-first empty presentation state. Domain
+scheduling and schema-v1 Drift persistence are implemented and tested; task
+editing UI, notifications, attachment file handling, and exports belong to
+later issues.
