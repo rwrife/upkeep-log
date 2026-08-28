@@ -122,6 +122,7 @@ class CompletionRevisions extends Table {
   IntColumn get revision => integer()();
   TextColumn get actualDate => text()();
   TextColumn get notes => text().nullable()();
+  TextColumn get partsText => text().nullable()();
   IntColumn get costMinorUnits => integer().nullable()();
   TextColumn get costCurrency => text().nullable()();
   IntColumn get revisedAtUtc =>
@@ -172,14 +173,18 @@ class AttachmentMetadataRows extends Table {
 class UpkeepDatabase extends _$UpkeepDatabase {
   UpkeepDatabase(super.executor);
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (Migrator m) async {
       await m.createAll();
       await _createInvariantTriggers();
     },
-    onUpgrade: (Migrator m, int from, int to) async {},
+    onUpgrade: (Migrator m, int from, int to) async {
+      if (from < 2) {
+        await m.addColumn(completionRevisions, completionRevisions.partsText);
+      }
+    },
     beforeOpen: (OpeningDetails details) async =>
         customStatement('PRAGMA foreign_keys = ON'),
   );

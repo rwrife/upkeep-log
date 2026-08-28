@@ -98,19 +98,19 @@ The MVP must work with TalkBack and VoiceOver, support dynamic text without clip
 
 ## Current status
 
-**Scheduling and persistence foundation.** The repository pins Flutter 3.47.1
-and now includes documented immutable domain entities, deterministic date-only
-recurrence, application repository ports, and a schema-v1 Drift/SQLite adapter
-with append-only completion revisions and migration/reopen tests. The app still
-shows the local-first empty state: task editing, notifications, attachments on
-disk, exports, and other user workflows remain backlog work. No signed package
-or store release is claimed.
+**Primary local workflow.** The repository pins Flutter 3.47.1 and includes
+immutable domain entities, deterministic date-only recurrence, a schema-v2
+Drift/SQLite adapter, and an accessible mobile workflow for home/room/asset/task
+setup, Due/Upcoming/Completed views, snooze, and transactional completion with
+notes, parts, and cost. Notifications, attachments on disk, exports, and other
+later workflows remain backlog work. No signed package or store release is
+claimed.
 
 ### Milestones
 
 1. Reproducible Flutter skeleton and CI — scaffolded; CI is the platform-build gate
-2. Tested local domain, scheduling engine, and schema-v1 persistence — complete
-3. Accessible due/completion workflow
+2. Tested local domain, scheduling engine, and schema-v2 persistence — complete
+3. Accessible due/completion workflow — complete
 4. Asset history, search, and attachments
 5. Backup/restore, CSV export, and privacy controls
 6. Platform builds and release-readiness checks
@@ -134,7 +134,9 @@ flutter run
 
 See [bootstrap and verification](docs/bootstrap.md) for platform build commands
 and host limitations, and [architecture boundaries](docs/architecture.md) for
-the enforced dependency rules.
+the enforced dependency rules. See
+[the primary workflow](docs/primary-workflow.md) for status, transaction, and
+accessibility behavior.
 
 ## License
 

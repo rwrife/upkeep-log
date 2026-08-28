@@ -9,86 +9,91 @@ import 'package:upkeep_log/adapters/database/upkeep_database.dart'
 import 'package:upkeep_log/domain/domain.dart';
 
 void main() {
-  test('opens committed schema-v1 fixture and reads its typed seed', () async {
-    final Directory temp = await Directory.systemTemp.createTemp('upkeep-v1-');
-    addTearDown(() => temp.delete(recursive: true));
-    final File file = File('${temp.path}/fixture.sqlite');
-    final sqlite.Database raw = sqlite.sqlite3.open(file.path);
-    raw.execute(await File('test/fixtures/schema_v1.sql').readAsString());
-    raw.close();
+  test(
+    'migrates committed schema-v1 fixture and reads its typed seed',
+    () async {
+      final Directory temp = await Directory.systemTemp.createTemp(
+        'upkeep-v1-',
+      );
+      addTearDown(() => temp.delete(recursive: true));
+      final File file = File('${temp.path}/fixture.sqlite');
+      final sqlite.Database raw = sqlite.sqlite3.open(file.path);
+      raw.execute(await File('test/fixtures/schema_v1.sql').readAsString());
+      raw.close();
 
-    final UpkeepDatabase database = UpkeepDatabase(NativeDatabase(file));
-    final DriftUpkeepRepository repository = DriftUpkeepRepository(database);
-    expect(database.schemaVersion, 1);
-    expect((await repository.homeById('fixture-home'))!.name, 'Fixture Home');
-    expect((await repository.roomById('fixture-room'))!.name, 'Kitchen');
-    expect(
-      (await repository.assetById('fixture-asset'))!.roomId,
-      'fixture-room',
-    );
-    final TaskTemplate task = (await repository.taskById('fixture-task'))!;
-    expect(task.recurrence, isA<YearlyRecurrence>());
-    expect(task.recurrenceAnchorDay, 29);
-    expect(task.recurrenceAnchorMonth, 2);
-    expect(task.reminder!.hour, 23);
-    expect(task.reminder!.minute, 59);
-    expect(task.reminder!.timeZoneId, 'America/New_York');
-    expect(
-      (await repository.occurrenceById('fixture-occurrence'))!.state,
-      OccurrenceState.completed,
-    );
-    final List<Completion> history = await repository.completionHistory(
-      'fixture-completion',
-    );
-    expect(history, hasLength(2));
-    expect(history.first.cost!.minorUnits, 1234);
-    expect(history.first.notes, 'notes');
-    expect(
-      history.first.revisedAtUtc,
-      DateTime.fromMicrosecondsSinceEpoch(1772359200000000, isUtc: true),
-    );
-    expect(history.last.cost, isNull);
-    expect(history.last.notes, isNull);
-    expect(
-      history.last.revisedAtUtc,
-      DateTime.fromMicrosecondsSinceEpoch(1772445600000000, isUtc: true),
-    );
-    expect(
-      (await repository.attachmentsForCompletion('fixture-completion'))
-          .single
-          .caption,
-      'receipt',
-    );
-    expect(
-      await database.customSelect('PRAGMA foreign_key_check').get(),
-      isEmpty,
-    );
-    expect(
-      (await database.customSelect('PRAGMA integrity_check').get())
-          .single
-          .data
-          .values
-          .single,
-      'ok',
-    );
-    await database.close();
+      final UpkeepDatabase database = UpkeepDatabase(NativeDatabase(file));
+      final DriftUpkeepRepository repository = DriftUpkeepRepository(database);
+      expect(database.schemaVersion, 2);
+      expect((await repository.homeById('fixture-home'))!.name, 'Fixture Home');
+      expect((await repository.roomById('fixture-room'))!.name, 'Kitchen');
+      expect(
+        (await repository.assetById('fixture-asset'))!.roomId,
+        'fixture-room',
+      );
+      final TaskTemplate task = (await repository.taskById('fixture-task'))!;
+      expect(task.recurrence, isA<YearlyRecurrence>());
+      expect(task.recurrenceAnchorDay, 29);
+      expect(task.recurrenceAnchorMonth, 2);
+      expect(task.reminder!.hour, 23);
+      expect(task.reminder!.minute, 59);
+      expect(task.reminder!.timeZoneId, 'America/New_York');
+      expect(
+        (await repository.occurrenceById('fixture-occurrence'))!.state,
+        OccurrenceState.completed,
+      );
+      final List<Completion> history = await repository.completionHistory(
+        'fixture-completion',
+      );
+      expect(history, hasLength(2));
+      expect(history.first.cost!.minorUnits, 1234);
+      expect(history.first.notes, 'notes');
+      expect(
+        history.first.revisedAtUtc,
+        DateTime.fromMicrosecondsSinceEpoch(1772359200000000, isUtc: true),
+      );
+      expect(history.last.cost, isNull);
+      expect(history.last.notes, isNull);
+      expect(
+        history.last.revisedAtUtc,
+        DateTime.fromMicrosecondsSinceEpoch(1772445600000000, isUtc: true),
+      );
+      expect(
+        (await repository.attachmentsForCompletion('fixture-completion'))
+            .single
+            .caption,
+        'receipt',
+      );
+      expect(
+        await database.customSelect('PRAGMA foreign_key_check').get(),
+        isEmpty,
+      );
+      expect(
+        (await database.customSelect('PRAGMA integrity_check').get())
+            .single
+            .data
+            .values
+            .single,
+        'ok',
+      );
+      await database.close();
 
-    final UpkeepDatabase reopened = UpkeepDatabase(NativeDatabase(file));
-    final DriftUpkeepRepository reopenedRepository = DriftUpkeepRepository(
-      reopened,
-    );
-    await reopenedRepository.saveHome(
-      HomeProfile(id: 'after-reopen', name: 'Writable'),
-    );
-    expect(
-      (await reopenedRepository.homeById('after-reopen'))!.name,
-      'Writable',
-    );
-    await reopened.close();
-  });
+      final UpkeepDatabase reopened = UpkeepDatabase(NativeDatabase(file));
+      final DriftUpkeepRepository reopenedRepository = DriftUpkeepRepository(
+        reopened,
+      );
+      await reopenedRepository.saveHome(
+        HomeProfile(id: 'after-reopen', name: 'Writable'),
+      );
+      expect(
+        (await reopenedRepository.homeById('after-reopen'))!.name,
+        'Writable',
+      );
+      await reopened.close();
+    },
+  );
 
   test(
-    'fixture has the same normalized v1 table, FK, index, and trigger shape',
+    'migrated fixture has the same normalized v2 schema shape as fresh data',
     () async {
       final Directory temp = await Directory.systemTemp.createTemp(
         'upkeep-shape-',
@@ -103,8 +108,29 @@ void main() {
       );
       await freshDrift.customSelect('SELECT 1').get();
       await freshDrift.close();
+      final UpkeepDatabase migratedDrift = UpkeepDatabase(
+        NativeDatabase(fixtureFile),
+      );
+      await migratedDrift.customSelect('SELECT 1').get();
+      await migratedDrift.close();
       final sqlite.Database fresh = sqlite.sqlite3.open(freshFile.path);
-      expect(_shape(fixture), _shape(fresh));
+      final Map<String, Object> migratedShape = _shape(fixture);
+      final Map<String, Object> freshShape = _shape(fresh);
+      for (final String key in freshShape.keys) {
+        if (key == 'completion_revisions.sql' ||
+            key == 'completion_revisions.columns') {
+          continue;
+        }
+        expect(migratedShape[key], freshShape[key], reason: key);
+      }
+      expect(
+        (migratedShape['completion_revisions.columns']! as List<Object?>)
+            .map((Object? row) => (row! as List<Object?>).first)
+            .toSet(),
+        (freshShape['completion_revisions.columns']! as List<Object?>)
+            .map((Object? row) => (row! as List<Object?>).first)
+            .toSet(),
+      );
       fixture.close();
       fresh.close();
     },

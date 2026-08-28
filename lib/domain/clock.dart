@@ -7,6 +7,21 @@ abstract interface class Clock {
   String get timeZoneId;
 }
 
+/// Production clock. Calendar dates intentionally come from the device's
+/// local civil time while persisted revision instants use UTC.
+final class SystemClock implements Clock {
+  const SystemClock();
+
+  @override
+  DateTime get nowUtc => DateTime.now().toUtc();
+
+  @override
+  LocalDate get today => LocalDate.fromDateTime(DateTime.now());
+
+  @override
+  String get timeZoneId => DateTime.now().timeZoneName;
+}
+
 /// Mutable deterministic clock for domain and application tests.
 final class FakeClock implements Clock {
   factory FakeClock(

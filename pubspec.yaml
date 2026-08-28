@@ -10,6 +10,10 @@ dependencies:
   drift: 2.34.3
   flutter:
     sdk: flutter
+  path_provider: 2.1.5
+  # Pin the Android implementation so lockfile resolution remains reproducible
+  # and does not silently add a new JNI toolchain between builds.
+  path_provider_android: 2.2.15
   sqlite3: 3.5.2
 
 dev_dependencies:
