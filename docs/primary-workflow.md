@@ -5,6 +5,10 @@ opens `upkeep-log.sqlite` in application-support storage, injects the Drift
 repository into `UpkeepWorkflow`, and never requires an account or network
 connection.
 
+Android and iOS expose only their app-private support directory through the
+`upkeep_log/storage` platform channel. This needs no broad file permission and
+adds no third-party storage plugin or network behavior.
+
 ## User flow
 
 1. Create or edit a local home profile.
