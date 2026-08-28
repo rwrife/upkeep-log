@@ -9,9 +9,80 @@ final class DriftUpkeepRepository implements UpkeepRepository {
   final UpkeepDatabase db;
 
   @override
+  Future<List<domain.HomeProfile>> homes() async =>
+      (await (db.select(db.homes)..orderBy(<OrderingTerm Function(Homes)>[
+                (t) => OrderingTerm.asc(t.name),
+              ]))
+              .get())
+          .map(
+            (r) => domain.HomeProfile(
+              id: r.id,
+              name: r.name,
+              addressLabel: r.addressLabel,
+            ),
+          )
+          .toList(growable: false);
+
+  @override
+  Future<List<domain.Room>> rooms() async =>
+      (await (db.select(db.rooms)..orderBy(<OrderingTerm Function(Rooms)>[
+                (t) => OrderingTerm.asc(t.name),
+              ]))
+              .get())
+          .map((r) => domain.Room(id: r.id, homeId: r.homeId, name: r.name))
+          .toList(growable: false);
+
+  @override
+  Future<List<domain.Asset>> assets() async =>
+      (await (db.select(db.assets)..orderBy(<OrderingTerm Function(Assets)>[
+                (t) => OrderingTerm.asc(t.name),
+              ]))
+              .get())
+          .map(
+            (r) => domain.Asset(
+              id: r.id,
+              homeId: r.homeId,
+              roomId: r.roomId,
+              name: r.name,
+            ),
+          )
+          .toList(growable: false);
+
+  @override
+  Future<List<domain.TaskTemplate>> tasks() async =>
+      (await (db.select(db.taskTemplates)
+                ..orderBy(<OrderingTerm Function(TaskTemplates)>[
+                  (t) => OrderingTerm.asc(t.name),
+                ]))
+              .get())
+          .map(_taskFromRow)
+          .toList(growable: false);
+
+  @override
+  Future<List<domain.TaskOccurrence>> occurrences() async =>
+      (await (db.select(db.taskOccurrences)
+                ..orderBy(<OrderingTerm Function(TaskOccurrences)>[
+                  (t) => OrderingTerm.asc(t.scheduledDate),
+                ]))
+              .get())
+          .map(_occurrenceFromRow)
+          .toList(growable: false);
+
+  @override
+  Future<List<domain.Completion>> completions() async {
+    final List<Completion> bases = await db.select(db.completions).get();
+    final List<domain.Completion> result = <domain.Completion>[];
+    for (final Completion base in bases) {
+      final domain.Completion? value = await latestCompletion(base.id);
+      if (value != null) result.add(value);
+    }
+    return result;
+  }
+
+  @override
   Future<void> saveHome(domain.HomeProfile v) => db
       .into(db.homes)
-      .insert(
+      .insertOnConflictUpdate(
         HomesCompanion.insert(
           id: v.id,
           name: v.name,
@@ -35,7 +106,9 @@ final class DriftUpkeepRepository implements UpkeepRepository {
   @override
   Future<void> saveRoom(domain.Room v) => db
       .into(db.rooms)
-      .insert(RoomsCompanion.insert(id: v.id, homeId: v.homeId, name: v.name));
+      .insertOnConflictUpdate(
+        RoomsCompanion.insert(id: v.id, homeId: v.homeId, name: v.name),
+      );
   @override
   Future<domain.Room?> roomById(String id) async {
     final Room? r = await (db.select(
@@ -58,7 +131,7 @@ final class DriftUpkeepRepository implements UpkeepRepository {
     }
     await db
         .into(db.assets)
-        .insert(
+        .insertOnConflictUpdate(
           AssetsCompanion.insert(
             id: v.id,
             homeId: v.homeId,
@@ -104,7 +177,7 @@ final class DriftUpkeepRepository implements UpkeepRepository {
     final (String, int) encoded = _encodeRecurrence(v.recurrence);
     await db
         .into(db.taskTemplates)
-        .insert(
+        .insertOnConflictUpdate(
           TaskTemplatesCompanion.insert(
             id: v.id,
             homeId: v.homeId,
@@ -130,37 +203,13 @@ final class DriftUpkeepRepository implements UpkeepRepository {
     final TaskTemplate? r = await (db.select(
       db.taskTemplates,
     )..where((t) => t.id.equals(id))).getSingleOrNull();
-    if (r == null) return null;
-    final domain.ReminderIntent? reminder = r.reminderHour == null
-        ? null
-        : domain.ReminderIntent(
-            hour: r.reminderHour!,
-            minute: r.reminderMinute!,
-            timeZoneId: r.reminderTimeZone!,
-          );
-    return domain.TaskTemplate(
-      id: r.id,
-      homeId: r.homeId,
-      roomId: r.roomId,
-      assetId: r.assetId,
-      name: r.name,
-      startDate: domain.LocalDate.parse(r.startDate),
-      recurrence: _decodeRecurrence(
-        r.recurrenceKind,
-        r.recurrenceInterval,
-        r.recurrenceAnchor,
-      ),
-      recurrenceAnchorDay: r.recurrenceAnchorDay,
-      recurrenceAnchorMonth: r.recurrenceAnchorMonth,
-      reminder: reminder,
-      paused: r.paused,
-    );
+    return r == null ? null : _taskFromRow(r);
   }
 
   @override
   Future<void> saveOccurrence(domain.TaskOccurrence v) => db
       .into(db.taskOccurrences)
-      .insert(
+      .insertOnConflictUpdate(
         TaskOccurrencesCompanion.insert(
           id: v.id,
           taskTemplateId: v.taskTemplateId,
@@ -174,21 +223,26 @@ final class DriftUpkeepRepository implements UpkeepRepository {
     final TaskOccurrence? r = await (db.select(
       db.taskOccurrences,
     )..where((t) => t.id.equals(id))).getSingleOrNull();
-    return r == null
-        ? null
-        : domain.TaskOccurrence(
-            id: r.id,
-            taskTemplateId: r.taskTemplateId,
-            scheduledDate: domain.LocalDate.parse(r.scheduledDate),
-            snoozedUntil: r.snoozedUntil == null
-                ? null
-                : domain.LocalDate.parse(r.snoozedUntil!),
-            state: domain.OccurrenceState.values.byName(r.state),
-          );
+    return r == null ? null : _occurrenceFromRow(r);
   }
 
   @override
-  Future<void> saveCompletion(domain.Completion v) => db.transaction(() async {
+  Future<void> saveTaskWithOccurrence(
+    domain.TaskTemplate task,
+    domain.TaskOccurrence occurrence,
+  ) => db.transaction(() async {
+    await saveTask(task);
+    await saveOccurrence(occurrence);
+  });
+
+  @override
+  Future<void> saveCompletion(domain.Completion v) => completeOccurrence(v);
+
+  @override
+  Future<void> completeOccurrence(
+    domain.Completion v, {
+    domain.TaskOccurrence? nextOccurrence,
+  }) => db.transaction(() async {
     if (v.revision != 1) {
       throw StateError('Initial completion revision must be 1');
     }
@@ -215,6 +269,21 @@ final class DriftUpkeepRepository implements UpkeepRepository {
               ..where((t) => t.id.equals(v.occurrenceId)))
             .write(const TaskOccurrencesCompanion(state: Value('completed')));
     if (updated != 1) throw StateError('Occurrence completion update failed');
+    if (nextOccurrence != null) {
+      await db
+          .into(db.taskOccurrences)
+          .insert(
+            TaskOccurrencesCompanion.insert(
+              id: nextOccurrence.id,
+              taskTemplateId: nextOccurrence.taskTemplateId,
+              scheduledDate: nextOccurrence.scheduledDate.toIso8601String(),
+              snoozedUntil: Value(
+                nextOccurrence.snoozedUntil?.toIso8601String(),
+              ),
+              state: nextOccurrence.state.name,
+            ),
+          );
+    }
   });
 
   @override
@@ -261,6 +330,7 @@ final class DriftUpkeepRepository implements UpkeepRepository {
           revision: v.revision,
           actualDate: v.actualDate.toIso8601String(),
           notes: Value(v.notes),
+          partsText: Value(v.parts),
           costMinorUnits: Value(v.cost?.minorUnits),
           costCurrency: Value(v.cost?.currency),
           revisedAtUtc: v.revisedAtUtc,
@@ -288,6 +358,7 @@ final class DriftUpkeepRepository implements UpkeepRepository {
             scheduledDate: domain.LocalDate.parse(base.scheduledDate),
             actualDate: domain.LocalDate.parse(r.actualDate),
             notes: r.notes,
+            parts: r.partsText,
             cost: r.costMinorUnits == null
                 ? null
                 : domain.Money(
@@ -343,9 +414,50 @@ final class DriftUpkeepRepository implements UpkeepRepository {
   Future<void> deleteRoom(String id) =>
       (db.delete(db.rooms)..where((t) => t.id.equals(id))).go();
   @override
+  Future<void> deleteTask(String id) =>
+      (db.delete(db.taskTemplates)..where((t) => t.id.equals(id))).go();
+  @override
   Future<void> deleteHome(String id) =>
       (db.delete(db.homes)..where((t) => t.id.equals(id))).go();
 }
+
+domain.TaskTemplate _taskFromRow(TaskTemplate r) {
+  final domain.ReminderIntent? reminder = r.reminderHour == null
+      ? null
+      : domain.ReminderIntent(
+          hour: r.reminderHour!,
+          minute: r.reminderMinute!,
+          timeZoneId: r.reminderTimeZone!,
+        );
+  return domain.TaskTemplate(
+    id: r.id,
+    homeId: r.homeId,
+    roomId: r.roomId,
+    assetId: r.assetId,
+    name: r.name,
+    startDate: domain.LocalDate.parse(r.startDate),
+    recurrence: _decodeRecurrence(
+      r.recurrenceKind,
+      r.recurrenceInterval,
+      r.recurrenceAnchor,
+    ),
+    recurrenceAnchorDay: r.recurrenceAnchorDay,
+    recurrenceAnchorMonth: r.recurrenceAnchorMonth,
+    reminder: reminder,
+    paused: r.paused,
+  );
+}
+
+domain.TaskOccurrence _occurrenceFromRow(TaskOccurrence r) =>
+    domain.TaskOccurrence(
+      id: r.id,
+      taskTemplateId: r.taskTemplateId,
+      scheduledDate: domain.LocalDate.parse(r.scheduledDate),
+      snoozedUntil: r.snoozedUntil == null
+          ? null
+          : domain.LocalDate.parse(r.snoozedUntil!),
+      state: domain.OccurrenceState.values.byName(r.state),
+    );
 
 (String, int) _encodeRecurrence(
   domain.RecurrencePolicy value,

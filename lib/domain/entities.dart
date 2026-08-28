@@ -128,6 +128,7 @@ final class Completion {
     required this.revision,
     required DateTime revisedAtUtc,
     this.notes,
+    this.parts,
     this.cost,
   }) : id = _required(id, 'id'),
        occurrenceId = _required(occurrenceId, 'occurrenceId'),
@@ -141,6 +142,7 @@ final class Completion {
   final LocalDate scheduledDate;
   final LocalDate actualDate;
   final String? notes;
+  final String? parts;
   final Money? cost;
   final int revision;
   final DateTime revisedAtUtc;

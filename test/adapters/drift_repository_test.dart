@@ -16,7 +16,7 @@ void main() {
   tearDown(() => database.close());
 
   test('schema v1 performs typed hierarchy round trips', () async {
-    expect(database.schemaVersion, 1);
+    expect(database.schemaVersion, 2);
     await repository.saveHome(HomeProfile(id: 'h', name: 'Home'));
     await repository.saveRoom(Room(id: 'r', homeId: 'h', name: 'Kitchen'));
     await repository.saveAsset(
@@ -119,6 +119,7 @@ void main() {
           scheduledDate: LocalDate(2026, 4, 1),
           actualDate: LocalDate(2026, 4, 3),
           notes: 'first',
+          parts: '20x20 filter',
           cost: Money(minorUnits: 1299, currency: 'USD'),
           revision: 1,
           revisedAtUtc: DateTime.utc(2026, 4, 3, 10),
@@ -150,6 +151,7 @@ void main() {
       final List<Completion> history = await repository.completionHistory('c');
       expect(history.map((Completion c) => c.revision), <int>[1, 2]);
       expect((await repository.latestCompletion('c'))!.notes, 'corrected');
+      expect(history.first.parts, '20x20 filter');
       expect(
         (await repository.attachmentsForCompletion('c')).single.sha256,
         'b' * 64,

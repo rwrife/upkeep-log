@@ -70,7 +70,8 @@ build evidence comes from the x64 Linux and macOS GitHub-hosted CI jobs unless a
 matching official host toolchain is available. Linux cannot perform the Xcode
 build, and a machine without the Android SDK cannot perform the APK build.
 
-The app currently launches the local-first empty presentation state. Domain
-scheduling and schema-v1 Drift persistence are implemented and tested; task
-editing UI, notifications, attachment file handling, and exports belong to
-later issues.
+The app opens its schema-v2 Drift database in platform application-support
+storage and launches the local-first due-to-completion workflow. Home, room,
+asset, and task editing plus transactional completion are implemented and
+tested; notifications, attachment file handling, and exports belong to later
+issues.

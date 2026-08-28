@@ -13,6 +13,10 @@ presentation  ---> application ---> domain
 `lib/main.dart` is the composition root. It may construct adapters and inject
 them into application services before starting presentation code.
 
+`UpkeepWorkflow` is the application facade for setup, snooze, completion, and
+snapshot loading. Completion delegates one atomic unit of work to the repository
+so the completion revision, occurrence state, and next occurrence cannot split.
+
 ## Layer rules
 
 - **Domain** is pure Dart. It owns entities, value objects, invariants,

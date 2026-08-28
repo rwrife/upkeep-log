@@ -2434,6 +2434,17 @@ class $CompletionRevisionsTable extends CompletionRevisions
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _partsTextMeta = const VerificationMeta(
+    'partsText',
+  );
+  @override
+  late final GeneratedColumn<String> partsText = GeneratedColumn<String>(
+    'parts_text',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _costMinorUnitsMeta = const VerificationMeta(
     'costMinorUnits',
   );
@@ -2473,6 +2484,7 @@ class $CompletionRevisionsTable extends CompletionRevisions
     revision,
     actualDate,
     notes,
+    partsText,
     costMinorUnits,
     costCurrency,
     revisedAtUtc,
@@ -2522,6 +2534,12 @@ class $CompletionRevisionsTable extends CompletionRevisions
         notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
       );
     }
+    if (data.containsKey('parts_text')) {
+      context.handle(
+        _partsTextMeta,
+        partsText.isAcceptableOrUnknown(data['parts_text']!, _partsTextMeta),
+      );
+    }
     if (data.containsKey('cost_minor_units')) {
       context.handle(
         _costMinorUnitsMeta,
@@ -2565,6 +2583,10 @@ class $CompletionRevisionsTable extends CompletionRevisions
         DriftSqlType.string,
         data['${effectivePrefix}notes'],
       ),
+      partsText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parts_text'],
+      ),
       costMinorUnits: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}cost_minor_units'],
@@ -2597,6 +2619,7 @@ class CompletionRevision extends DataClass
   final int revision;
   final String actualDate;
   final String? notes;
+  final String? partsText;
   final int? costMinorUnits;
   final String? costCurrency;
   final DateTime revisedAtUtc;
@@ -2605,6 +2628,7 @@ class CompletionRevision extends DataClass
     required this.revision,
     required this.actualDate,
     this.notes,
+    this.partsText,
     this.costMinorUnits,
     this.costCurrency,
     required this.revisedAtUtc,
@@ -2617,6 +2641,9 @@ class CompletionRevision extends DataClass
     map['actual_date'] = Variable<String>(actualDate);
     if (!nullToAbsent || notes != null) {
       map['notes'] = Variable<String>(notes);
+    }
+    if (!nullToAbsent || partsText != null) {
+      map['parts_text'] = Variable<String>(partsText);
     }
     if (!nullToAbsent || costMinorUnits != null) {
       map['cost_minor_units'] = Variable<int>(costMinorUnits);
@@ -2640,6 +2667,9 @@ class CompletionRevision extends DataClass
       notes: notes == null && nullToAbsent
           ? const Value.absent()
           : Value(notes),
+      partsText: partsText == null && nullToAbsent
+          ? const Value.absent()
+          : Value(partsText),
       costMinorUnits: costMinorUnits == null && nullToAbsent
           ? const Value.absent()
           : Value(costMinorUnits),
@@ -2660,6 +2690,7 @@ class CompletionRevision extends DataClass
       revision: serializer.fromJson<int>(json['revision']),
       actualDate: serializer.fromJson<String>(json['actualDate']),
       notes: serializer.fromJson<String?>(json['notes']),
+      partsText: serializer.fromJson<String?>(json['partsText']),
       costMinorUnits: serializer.fromJson<int?>(json['costMinorUnits']),
       costCurrency: serializer.fromJson<String?>(json['costCurrency']),
       revisedAtUtc: serializer.fromJson<DateTime>(json['revisedAtUtc']),
@@ -2673,6 +2704,7 @@ class CompletionRevision extends DataClass
       'revision': serializer.toJson<int>(revision),
       'actualDate': serializer.toJson<String>(actualDate),
       'notes': serializer.toJson<String?>(notes),
+      'partsText': serializer.toJson<String?>(partsText),
       'costMinorUnits': serializer.toJson<int?>(costMinorUnits),
       'costCurrency': serializer.toJson<String?>(costCurrency),
       'revisedAtUtc': serializer.toJson<DateTime>(revisedAtUtc),
@@ -2684,6 +2716,7 @@ class CompletionRevision extends DataClass
     int? revision,
     String? actualDate,
     Value<String?> notes = const Value.absent(),
+    Value<String?> partsText = const Value.absent(),
     Value<int?> costMinorUnits = const Value.absent(),
     Value<String?> costCurrency = const Value.absent(),
     DateTime? revisedAtUtc,
@@ -2692,6 +2725,7 @@ class CompletionRevision extends DataClass
     revision: revision ?? this.revision,
     actualDate: actualDate ?? this.actualDate,
     notes: notes.present ? notes.value : this.notes,
+    partsText: partsText.present ? partsText.value : this.partsText,
     costMinorUnits: costMinorUnits.present
         ? costMinorUnits.value
         : this.costMinorUnits,
@@ -2708,6 +2742,7 @@ class CompletionRevision extends DataClass
           ? data.actualDate.value
           : this.actualDate,
       notes: data.notes.present ? data.notes.value : this.notes,
+      partsText: data.partsText.present ? data.partsText.value : this.partsText,
       costMinorUnits: data.costMinorUnits.present
           ? data.costMinorUnits.value
           : this.costMinorUnits,
@@ -2727,6 +2762,7 @@ class CompletionRevision extends DataClass
           ..write('revision: $revision, ')
           ..write('actualDate: $actualDate, ')
           ..write('notes: $notes, ')
+          ..write('partsText: $partsText, ')
           ..write('costMinorUnits: $costMinorUnits, ')
           ..write('costCurrency: $costCurrency, ')
           ..write('revisedAtUtc: $revisedAtUtc')
@@ -2740,6 +2776,7 @@ class CompletionRevision extends DataClass
     revision,
     actualDate,
     notes,
+    partsText,
     costMinorUnits,
     costCurrency,
     revisedAtUtc,
@@ -2752,6 +2789,7 @@ class CompletionRevision extends DataClass
           other.revision == this.revision &&
           other.actualDate == this.actualDate &&
           other.notes == this.notes &&
+          other.partsText == this.partsText &&
           other.costMinorUnits == this.costMinorUnits &&
           other.costCurrency == this.costCurrency &&
           other.revisedAtUtc == this.revisedAtUtc);
@@ -2762,6 +2800,7 @@ class CompletionRevisionsCompanion extends UpdateCompanion<CompletionRevision> {
   final Value<int> revision;
   final Value<String> actualDate;
   final Value<String?> notes;
+  final Value<String?> partsText;
   final Value<int?> costMinorUnits;
   final Value<String?> costCurrency;
   final Value<DateTime> revisedAtUtc;
@@ -2771,6 +2810,7 @@ class CompletionRevisionsCompanion extends UpdateCompanion<CompletionRevision> {
     this.revision = const Value.absent(),
     this.actualDate = const Value.absent(),
     this.notes = const Value.absent(),
+    this.partsText = const Value.absent(),
     this.costMinorUnits = const Value.absent(),
     this.costCurrency = const Value.absent(),
     this.revisedAtUtc = const Value.absent(),
@@ -2781,6 +2821,7 @@ class CompletionRevisionsCompanion extends UpdateCompanion<CompletionRevision> {
     required int revision,
     required String actualDate,
     this.notes = const Value.absent(),
+    this.partsText = const Value.absent(),
     this.costMinorUnits = const Value.absent(),
     this.costCurrency = const Value.absent(),
     required DateTime revisedAtUtc,
@@ -2794,6 +2835,7 @@ class CompletionRevisionsCompanion extends UpdateCompanion<CompletionRevision> {
     Expression<int>? revision,
     Expression<String>? actualDate,
     Expression<String>? notes,
+    Expression<String>? partsText,
     Expression<int>? costMinorUnits,
     Expression<String>? costCurrency,
     Expression<int>? revisedAtUtc,
@@ -2804,6 +2846,7 @@ class CompletionRevisionsCompanion extends UpdateCompanion<CompletionRevision> {
       if (revision != null) 'revision': revision,
       if (actualDate != null) 'actual_date': actualDate,
       if (notes != null) 'notes': notes,
+      if (partsText != null) 'parts_text': partsText,
       if (costMinorUnits != null) 'cost_minor_units': costMinorUnits,
       if (costCurrency != null) 'cost_currency': costCurrency,
       if (revisedAtUtc != null) 'revised_at_utc': revisedAtUtc,
@@ -2816,6 +2859,7 @@ class CompletionRevisionsCompanion extends UpdateCompanion<CompletionRevision> {
     Value<int>? revision,
     Value<String>? actualDate,
     Value<String?>? notes,
+    Value<String?>? partsText,
     Value<int?>? costMinorUnits,
     Value<String?>? costCurrency,
     Value<DateTime>? revisedAtUtc,
@@ -2826,6 +2870,7 @@ class CompletionRevisionsCompanion extends UpdateCompanion<CompletionRevision> {
       revision: revision ?? this.revision,
       actualDate: actualDate ?? this.actualDate,
       notes: notes ?? this.notes,
+      partsText: partsText ?? this.partsText,
       costMinorUnits: costMinorUnits ?? this.costMinorUnits,
       costCurrency: costCurrency ?? this.costCurrency,
       revisedAtUtc: revisedAtUtc ?? this.revisedAtUtc,
@@ -2847,6 +2892,9 @@ class CompletionRevisionsCompanion extends UpdateCompanion<CompletionRevision> {
     }
     if (notes.present) {
       map['notes'] = Variable<String>(notes.value);
+    }
+    if (partsText.present) {
+      map['parts_text'] = Variable<String>(partsText.value);
     }
     if (costMinorUnits.present) {
       map['cost_minor_units'] = Variable<int>(costMinorUnits.value);
@@ -2874,6 +2922,7 @@ class CompletionRevisionsCompanion extends UpdateCompanion<CompletionRevision> {
           ..write('revision: $revision, ')
           ..write('actualDate: $actualDate, ')
           ..write('notes: $notes, ')
+          ..write('partsText: $partsText, ')
           ..write('costMinorUnits: $costMinorUnits, ')
           ..write('costCurrency: $costCurrency, ')
           ..write('revisedAtUtc: $revisedAtUtc, ')
@@ -5950,6 +5999,7 @@ typedef $$CompletionRevisionsTableCreateCompanionBuilder =
       required int revision,
       required String actualDate,
       Value<String?> notes,
+      Value<String?> partsText,
       Value<int?> costMinorUnits,
       Value<String?> costCurrency,
       required DateTime revisedAtUtc,
@@ -5961,6 +6011,7 @@ typedef $$CompletionRevisionsTableUpdateCompanionBuilder =
       Value<int> revision,
       Value<String> actualDate,
       Value<String?> notes,
+      Value<String?> partsText,
       Value<int?> costMinorUnits,
       Value<String?> costCurrency,
       Value<DateTime> revisedAtUtc,
@@ -6020,6 +6071,11 @@ class $$CompletionRevisionsTableFilterComposer
 
   ColumnFilters<String> get notes => $composableBuilder(
     column: $table.notes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get partsText => $composableBuilder(
+    column: $table.partsText,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6087,6 +6143,11 @@ class $$CompletionRevisionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get partsText => $composableBuilder(
+    column: $table.partsText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get costMinorUnits => $composableBuilder(
     column: $table.costMinorUnits,
     builder: (column) => ColumnOrderings(column),
@@ -6145,6 +6206,9 @@ class $$CompletionRevisionsTableAnnotationComposer
 
   GeneratedColumn<String> get notes =>
       $composableBuilder(column: $table.notes, builder: (column) => column);
+
+  GeneratedColumn<String> get partsText =>
+      $composableBuilder(column: $table.partsText, builder: (column) => column);
 
   GeneratedColumn<int> get costMinorUnits => $composableBuilder(
     column: $table.costMinorUnits,
@@ -6226,6 +6290,7 @@ class $$CompletionRevisionsTableTableManager
                 Value<int> revision = const Value.absent(),
                 Value<String> actualDate = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
+                Value<String?> partsText = const Value.absent(),
                 Value<int?> costMinorUnits = const Value.absent(),
                 Value<String?> costCurrency = const Value.absent(),
                 Value<DateTime> revisedAtUtc = const Value.absent(),
@@ -6235,6 +6300,7 @@ class $$CompletionRevisionsTableTableManager
                 revision: revision,
                 actualDate: actualDate,
                 notes: notes,
+                partsText: partsText,
                 costMinorUnits: costMinorUnits,
                 costCurrency: costCurrency,
                 revisedAtUtc: revisedAtUtc,
@@ -6246,6 +6312,7 @@ class $$CompletionRevisionsTableTableManager
                 required int revision,
                 required String actualDate,
                 Value<String?> notes = const Value.absent(),
+                Value<String?> partsText = const Value.absent(),
                 Value<int?> costMinorUnits = const Value.absent(),
                 Value<String?> costCurrency = const Value.absent(),
                 required DateTime revisedAtUtc,
@@ -6255,6 +6322,7 @@ class $$CompletionRevisionsTableTableManager
                 revision: revision,
                 actualDate: actualDate,
                 notes: notes,
+                partsText: partsText,
                 costMinorUnits: costMinorUnits,
                 costCurrency: costCurrency,
                 revisedAtUtc: revisedAtUtc,
