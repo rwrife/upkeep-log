@@ -158,6 +158,12 @@ final class DriftUpkeepRepository implements UpkeepRepository {
 
   @override
   Future<void> saveTask(domain.TaskTemplate v) async {
+    final TaskTemplate? existing = await (db.select(
+      db.taskTemplates,
+    )..where((t) => t.id.equals(v.id))).getSingleOrNull();
+    if (existing != null && existing.homeId != v.homeId) {
+      throw StateError('An existing task cannot move to another home');
+    }
     if (v.roomId != null) {
       final Room? room = await (db.select(
         db.rooms,
@@ -395,9 +401,13 @@ final class DriftUpkeepRepository implements UpkeepRepository {
   Future<List<domain.AttachmentMetadata>> attachmentsForCompletion(
     String id,
   ) async =>
-      (await (db.select(
-            db.attachmentMetadataRows,
-          )..where((t) => t.completionId.equals(id))).get())
+      (await (db.select(db.attachmentMetadataRows)
+                ..where((t) => t.completionId.equals(id))
+                ..orderBy(<OrderingTerm Function(AttachmentMetadataRows)>[
+                  (t) => OrderingTerm.asc(t.relativePath),
+                  (t) => OrderingTerm.asc(t.id),
+                ]))
+              .get())
           .map(
             (r) => domain.AttachmentMetadata(
               id: r.id,
@@ -411,15 +421,66 @@ final class DriftUpkeepRepository implements UpkeepRepository {
           .toList();
 
   @override
+  Future<List<domain.AttachmentMetadata>> attachments() async =>
+      (await (db.select(db.attachmentMetadataRows)
+                ..orderBy(<OrderingTerm Function(AttachmentMetadataRows)>[
+                  (t) => OrderingTerm.asc(t.relativePath),
+                  (t) => OrderingTerm.asc(t.id),
+                ]))
+              .get())
+          .map(_attachmentFromRow)
+          .toList(growable: false);
+
+  @override
+  Future<void> deleteAttachment(String id) => (db.delete(
+    db.attachmentMetadataRows,
+  )..where((t) => t.id.equals(id))).go();
+
+  @override
   Future<void> deleteRoom(String id) =>
       (db.delete(db.rooms)..where((t) => t.id.equals(id))).go();
   @override
-  Future<void> deleteTask(String id) =>
-      (db.delete(db.taskTemplates)..where((t) => t.id.equals(id))).go();
+  Future<void> deleteTask(String id) => db.transaction(() async {
+    final QueryRow? completion = await db
+        .customSelect(
+          '''SELECT 1 FROM completions c
+             JOIN task_occurrences o ON o.id = c.occurrence_id
+             WHERE o.task_template_id = ? LIMIT 1''',
+          variables: <Variable<Object>>[Variable<String>(id)],
+        )
+        .getSingleOrNull();
+    if (completion != null) {
+      throw StateError('Cannot delete a task with completion history');
+    }
+    await (db.delete(db.taskTemplates)..where((t) => t.id.equals(id))).go();
+  });
   @override
-  Future<void> deleteHome(String id) =>
-      (db.delete(db.homes)..where((t) => t.id.equals(id))).go();
+  Future<void> deleteHome(String id) => db.transaction(() async {
+    final QueryRow? completion = await db
+        .customSelect(
+          '''SELECT 1 FROM completions c
+             JOIN task_occurrences o ON o.id = c.occurrence_id
+             JOIN task_templates t ON t.id = o.task_template_id
+             WHERE t.home_id = ? LIMIT 1''',
+          variables: <Variable<Object>>[Variable<String>(id)],
+        )
+        .getSingleOrNull();
+    if (completion != null) {
+      throw StateError('Cannot delete a home with completion history');
+    }
+    await (db.delete(db.homes)..where((t) => t.id.equals(id))).go();
+  });
 }
+
+domain.AttachmentMetadata _attachmentFromRow(AttachmentMetadataRow r) =>
+    domain.AttachmentMetadata(
+      id: r.id,
+      completionId: r.completionId,
+      relativePath: r.relativePath,
+      mediaType: r.mediaType,
+      sha256: r.sha256,
+      caption: r.caption,
+    );
 
 domain.TaskTemplate _taskFromRow(TaskTemplate r) {
   final domain.ReminderIntent? reminder = r.reminderHour == null

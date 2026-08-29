@@ -34,6 +34,8 @@ abstract interface class UpkeepRepository {
   Future<List<AttachmentMetadata>> attachmentsForCompletion(
     String completionId,
   );
+  Future<List<AttachmentMetadata>> attachments();
+  Future<void> deleteAttachment(String id);
   Future<void> deleteRoom(String id);
   Future<void> deleteTask(String id);
   Future<void> deleteHome(String id);

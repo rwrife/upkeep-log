@@ -147,19 +147,36 @@ void main() {
           caption: 'Receipt',
         ),
       );
+      await repository.saveAttachment(
+        AttachmentMetadata(
+          id: 'att-2',
+          completionId: 'c',
+          relativePath: 'attachments/a.jpg',
+          mediaType: 'image/jpeg',
+          sha256: 'c' * 64,
+        ),
+      );
 
       final List<Completion> history = await repository.completionHistory('c');
       expect(history.map((Completion c) => c.revision), <int>[1, 2]);
       expect((await repository.latestCompletion('c'))!.notes, 'corrected');
       expect(history.first.parts, '20x20 filter');
+      final List<AttachmentMetadata> forCompletion = await repository
+          .attachmentsForCompletion('c');
+      expect(forCompletion.map((value) => value.id).toSet(), {'att', 'att-2'});
       expect(
-        (await repository.attachmentsForCompletion('c')).single.sha256,
-        'b' * 64,
+        (await repository.attachments()).map((value) => value.id),
+        <String>['att-2', 'att'],
       );
+      await repository.deleteAttachment('att-2');
+      expect((await repository.attachmentsForCompletion('c')).single.id, 'att');
+      await repository.deleteAttachment('missing');
+      expect((await repository.attachments()).single.sha256, 'b' * 64);
       await expectLater(
         repository.appendCompletionRevision(history.first),
         throwsStateError,
       );
+      expect((await repository.latestCompletion('c'))!.revision, 2);
     },
   );
 
@@ -177,6 +194,61 @@ void main() {
       expect(await repository.homeById('h'), isNull);
       expect(await repository.roomById('r'), isNull);
       expect(await repository.assetById('a'), isNull);
+    },
+  );
+
+  test(
+    'completed task deletion preserves history and attachment metadata',
+    () async {
+      await _saveCompletedTaskWithAttachment(repository);
+
+      await expectLater(repository.deleteTask('t'), throwsStateError);
+
+      expect(await repository.taskById('t'), isNotNull);
+      expect((await repository.completionHistory('c')).single.revision, 1);
+      expect((await repository.attachmentsForCompletion('c')).single.id, 'att');
+    },
+  );
+
+  test(
+    'task deletion still cascades when no completion history exists',
+    () async {
+      await repository.saveHome(HomeProfile(id: 'h', name: 'Home'));
+      await repository.saveTask(
+        TaskTemplate(
+          id: 't',
+          homeId: 'h',
+          name: 'Pending task',
+          startDate: LocalDate(2026, 1, 1),
+          recurrence: const OneTimeRecurrence(),
+        ),
+      );
+      await repository.saveOccurrence(
+        TaskOccurrence(
+          id: 'o',
+          taskTemplateId: 't',
+          scheduledDate: LocalDate(2026, 1, 1),
+        ),
+      );
+
+      await repository.deleteTask('t');
+
+      expect(await repository.taskById('t'), isNull);
+      expect(await repository.occurrenceById('o'), isNull);
+    },
+  );
+
+  test(
+    'completed home deletion preserves history and attachment metadata',
+    () async {
+      await _saveCompletedTaskWithAttachment(repository);
+
+      await expectLater(repository.deleteHome('h'), throwsStateError);
+
+      expect(await repository.homeById('h'), isNotNull);
+      expect(await repository.taskById('t'), isNotNull);
+      expect((await repository.completionHistory('c')).single.revision, 1);
+      expect((await repository.attachmentsForCompletion('c')).single.id, 'att');
     },
   );
 
@@ -219,6 +291,48 @@ void main() {
       ),
       throwsA(anything),
     );
+  });
+
+  test('task home is immutable while same-home edits remain valid', () async {
+    await repository.saveHome(HomeProfile(id: 'h1', name: 'One'));
+    await repository.saveHome(HomeProfile(id: 'h2', name: 'Two'));
+    final TaskTemplate original = TaskTemplate(
+      id: 'task',
+      homeId: 'h1',
+      name: 'Original',
+      startDate: LocalDate(2026, 1, 1),
+      recurrence: const OneTimeRecurrence(),
+    );
+    await repository.saveTask(original);
+
+    await expectLater(
+      repository.saveTask(
+        TaskTemplate(
+          id: 'task',
+          homeId: 'h2',
+          name: 'Moved',
+          startDate: original.startDate,
+          recurrence: original.recurrence,
+        ),
+      ),
+      throwsStateError,
+    );
+    expect((await repository.taskById('task'))!.homeId, 'h1');
+
+    await repository.saveTask(
+      TaskTemplate(
+        id: 'task',
+        homeId: 'h1',
+        name: 'Edited in place',
+        startDate: original.startDate,
+        recurrence: original.recurrence,
+        paused: true,
+      ),
+    );
+    final TaskTemplate edited = (await repository.taskById('task'))!;
+    expect(edited.homeId, 'h1');
+    expect(edited.name, 'Edited in place');
+    expect(edited.paused, isTrue);
   });
 
   test('completion validates date, updates state atomically, and revisions increase time', () async {
@@ -475,5 +589,46 @@ void main() {
         afterEpoch,
       ]);
     },
+  );
+}
+
+Future<void> _saveCompletedTaskWithAttachment(
+  DriftUpkeepRepository repository,
+) async {
+  await repository.saveHome(HomeProfile(id: 'h', name: 'Home'));
+  await repository.saveTask(
+    TaskTemplate(
+      id: 't',
+      homeId: 'h',
+      name: 'Service',
+      startDate: LocalDate(2026, 1, 1),
+      recurrence: const OneTimeRecurrence(),
+    ),
+  );
+  await repository.saveOccurrence(
+    TaskOccurrence(
+      id: 'o',
+      taskTemplateId: 't',
+      scheduledDate: LocalDate(2026, 1, 1),
+    ),
+  );
+  await repository.saveCompletion(
+    Completion(
+      id: 'c',
+      occurrenceId: 'o',
+      scheduledDate: LocalDate(2026, 1, 1),
+      actualDate: LocalDate(2026, 1, 2),
+      revision: 1,
+      revisedAtUtc: DateTime.utc(2026, 1, 2),
+    ),
+  );
+  await repository.saveAttachment(
+    AttachmentMetadata(
+      id: 'att',
+      completionId: 'c',
+      relativePath: 'attachments/h/att.pdf',
+      mediaType: 'application/pdf',
+      sha256: 'a' * 64,
+    ),
   );
 }

@@ -26,6 +26,7 @@ void main() {
 
         if (path.startsWith('lib/application/') &&
             (target.startsWith('package:flutter') ||
+                target == 'dart:io' ||
                 _targetsLayer(path, target, 'adapters') ||
                 _targetsLayer(path, target, 'presentation'))) {
           violations.add('$path must not target $target');

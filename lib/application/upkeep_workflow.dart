@@ -1,5 +1,6 @@
 import 'package:upkeep_log/domain/domain.dart';
 
+import 'history.dart';
 import 'upkeep_repository.dart';
 
 typedef IdFactory = String Function(String kind);
@@ -32,6 +33,36 @@ final class WorkflowSnapshot {
       if (completion.occurrenceId == value.id) return completion;
     }
     return null;
+  }
+
+  List<HistoryEntry> history([HistoryFilter filter = const HistoryFilter()]) {
+    final List<HistoryEntry> entries = <HistoryEntry>[];
+    for (final Completion completion in completions) {
+      final TaskOccurrence occurrence = occurrences.singleWhere(
+        (TaskOccurrence value) => value.id == completion.occurrenceId,
+      );
+      final TaskTemplate task = taskFor(occurrence);
+      final Asset? asset = task.assetId == null
+          ? null
+          : assets.singleWhere((Asset value) => value.id == task.assetId);
+      final String? roomId = task.roomId ?? asset?.roomId;
+      final Room? room = roomId == null
+          ? null
+          : rooms.singleWhere((Room value) => value.id == roomId);
+      entries.add(
+        HistoryEntry(
+          home: homes.singleWhere(
+            (HomeProfile value) => value.id == task.homeId,
+          ),
+          task: task,
+          occurrence: occurrence,
+          completion: completion,
+          asset: asset,
+          room: room,
+        ),
+      );
+    }
+    return filterHistory(entries, filter);
   }
 
   List<TaskOccurrence> inBucket(OccurrenceBucket bucket) =>
@@ -142,6 +173,35 @@ final class UpkeepWorkflow {
             ),
     );
   }
+
+  Future<void> reviseCompletion({
+    required Completion current,
+    required LocalDate actualDate,
+    String? notes,
+    String? parts,
+    Money? cost,
+  }) async {
+    DateTime revisedAt = clock.nowUtc;
+    if (!revisedAt.isAfter(current.revisedAtUtc)) {
+      revisedAt = current.revisedAtUtc.add(const Duration(microseconds: 1));
+    }
+    await repository.appendCompletionRevision(
+      Completion(
+        id: current.id,
+        occurrenceId: current.occurrenceId,
+        scheduledDate: current.scheduledDate,
+        actualDate: actualDate,
+        notes: _optional(notes),
+        parts: _optional(parts),
+        cost: cost,
+        revision: current.revision + 1,
+        revisedAtUtc: revisedAt,
+      ),
+    );
+  }
+
+  Future<List<Completion>> completionRevisions(String id) =>
+      repository.completionHistory(id);
 
   Future<void> deleteTask(String id) => repository.deleteTask(id);
 }

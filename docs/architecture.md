@@ -16,6 +16,11 @@ them into application services before starting presentation code.
 `UpkeepWorkflow` is the application facade for setup, snooze, completion, and
 snapshot loading. Completion delegates one atomic unit of work to the repository
 so the completion revision, occurrence state, and next occurrence cannot split.
+`AttachmentService` validates ownership and coordinates metadata through an
+`AttachmentStore` port. The concrete private-file adapter owns copying,
+checksums, inspection, storage totals, and reference-safe cleanup. Native picker
+paths cross these boundaries only long enough to copy the selected bytes and
+are never persisted.
 
 ## Layer rules
 

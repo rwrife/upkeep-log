@@ -71,7 +71,9 @@ matching official host toolchain is available. Linux cannot perform the Xcode
 build, and a machine without the Android SDK cannot perform the APK build.
 
 The app opens its schema-v2 Drift database in platform application-support
-storage and launches the local-first due-to-completion workflow. Home, room,
-asset, and task editing plus transactional completion are implemented and
-tested; notifications, attachment file handling, and exports belong to later
+storage and launches the local-first workflow. History search, append-only
+completion corrections, and private attachment handling are implemented and
+tested. Android camera and system-document intents and iOS camera, PHPicker,
+and document picker are narrow platform-channel adapters; they are invoked only
+from an explicit Attach action. Notifications and exports belong to later
 issues.
