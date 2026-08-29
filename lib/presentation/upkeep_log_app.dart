@@ -1,14 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:upkeep_log/application/attachment_service.dart';
+import 'package:upkeep_log/application/history.dart';
 import 'package:upkeep_log/application/upkeep_workflow.dart';
 import 'package:upkeep_log/domain/domain.dart';
 
 /// Root widget for the local-first Upkeep Log application.
 class UpkeepLogApp extends StatelessWidget {
-  const UpkeepLogApp({required this.workflow, super.key});
+  const UpkeepLogApp({required this.workflow, this.attachments, super.key});
 
   final UpkeepWorkflow workflow;
+  final AttachmentService? attachments;
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +21,7 @@ class UpkeepLogApp extends StatelessWidget {
       theme: _theme(Brightness.light, const Color(0xFF2E6F5E)),
       darkTheme: _theme(Brightness.dark, const Color(0xFF74C7AD)),
       themeMode: ThemeMode.system,
-      home: WorkflowScreen(workflow: workflow),
+      home: WorkflowScreen(workflow: workflow, attachments: attachments),
     );
   }
 
@@ -34,9 +37,10 @@ class UpkeepLogApp extends StatelessWidget {
 }
 
 class WorkflowScreen extends StatefulWidget {
-  const WorkflowScreen({required this.workflow, super.key});
+  const WorkflowScreen({required this.workflow, this.attachments, super.key});
 
   final UpkeepWorkflow workflow;
+  final AttachmentService? attachments;
 
   @override
   State<WorkflowScreen> createState() => _WorkflowScreenState();
@@ -50,6 +54,12 @@ class _WorkflowScreenState extends State<WorkflowScreen> {
   int _page = 0;
   int _idCounter = 0;
   Object? _pendingSnooze;
+  String _historyText = '';
+  String? _historyAssetId;
+  String? _historyRoomId;
+  HistoryStatus _historyStatus = HistoryStatus.all;
+  LocalDate? _historyFrom;
+  LocalDate? _historyTo;
 
   @override
   void initState() {
@@ -372,11 +382,17 @@ class _WorkflowScreenState extends State<WorkflowScreen> {
   }
 
   Widget _completedPage(WorkflowSnapshot snapshot) {
-    final List<TaskOccurrence> values = snapshot
-        .inBucket(OccurrenceBucket.completed)
-        .reversed
-        .toList();
-    if (values.isEmpty) {
+    final List<HistoryEntry> values = snapshot.history(
+      HistoryFilter(
+        assetId: _historyAssetId,
+        roomId: _historyRoomId,
+        taskText: _historyText,
+        completedFrom: _historyFrom,
+        completedTo: _historyTo,
+        status: _historyStatus,
+      ),
+    );
+    if (snapshot.completions.isEmpty) {
       return const _EmptyState(
         title: 'No completed work yet',
         body: 'Completed upkeep and its scheduled and actual dates will appear here.',
@@ -384,25 +400,108 @@ class _WorkflowScreenState extends State<WorkflowScreen> {
     }
     return ListView(
       padding: const EdgeInsets.all(16),
-      children: values.map((TaskOccurrence occurrence) {
-        final TaskTemplate task = snapshot.taskFor(occurrence);
-        final Completion? completion = snapshot.completionFor(occurrence);
-        return Card(
-          child: ListTile(
-            leading: const Icon(Icons.check_circle_outline),
-            title: Text(task.name),
-            subtitle: Text(
-              completion == null
-                  ? 'Completed • scheduled ${occurrence.scheduledDate}'
-                  : 'Completed ${completion.actualDate} • scheduled ${completion.scheduledDate}'
-                        '${completion.notes == null ? '' : '\n${completion.notes}'}'
-                        '${completion.parts == null ? '' : '\nParts: ${completion.parts}'}'
-                        '${completion.cost == null ? '' : '\nCost: ${_formatMoney(completion.cost!)}'}',
-            ),
-            isThreeLine: completion?.notes != null || completion?.parts != null,
+      children: <Widget>[
+        TextField(
+          decoration: const InputDecoration(
+            labelText: 'Search task text',
+            prefixIcon: Icon(Icons.search),
           ),
-        );
-      }).toList(),
+          onChanged: (String value) => setState(() => _historyText = value),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            DropdownButton<String?>(
+              value: _historyAssetId,
+              hint: const Text('All assets'),
+              items: <DropdownMenuItem<String?>>[
+                const DropdownMenuItem<String?>(child: Text('All assets')),
+                ...snapshot.assets.map(
+                  (Asset value) => DropdownMenuItem<String?>(
+                    value: value.id,
+                    child: Text(value.name),
+                  ),
+                ),
+              ],
+              onChanged: (String? value) =>
+                  setState(() => _historyAssetId = value),
+            ),
+            DropdownButton<String?>(
+              value: _historyRoomId,
+              hint: const Text('All rooms'),
+              items: <DropdownMenuItem<String?>>[
+                const DropdownMenuItem<String?>(child: Text('All rooms')),
+                ...snapshot.rooms.map(
+                  (Room value) => DropdownMenuItem<String?>(
+                    value: value.id,
+                    child: Text(value.name),
+                  ),
+                ),
+              ],
+              onChanged: (String? value) =>
+                  setState(() => _historyRoomId = value),
+            ),
+            DropdownButton<HistoryStatus>(
+              value: _historyStatus,
+              items: const <DropdownMenuItem<HistoryStatus>>[
+                DropdownMenuItem(
+                  value: HistoryStatus.all,
+                  child: Text('All statuses'),
+                ),
+                DropdownMenuItem(
+                  value: HistoryStatus.completed,
+                  child: Text('Completed, uncorrected'),
+                ),
+                DropdownMenuItem(
+                  value: HistoryStatus.corrected,
+                  child: Text('Corrected'),
+                ),
+              ],
+              onChanged: (HistoryStatus? value) =>
+                  setState(() => _historyStatus = value!),
+            ),
+            OutlinedButton.icon(
+              onPressed: _editDateRange,
+              icon: const Icon(Icons.date_range),
+              label: Text(
+                _historyFrom == null && _historyTo == null
+                    ? 'Completion dates'
+                    : '${_historyFrom ?? 'Any'} – ${_historyTo ?? 'Any'}',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text('${values.length} results • newest completion first'),
+        if (values.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Text('No history matches these local filters.'),
+          ),
+        ...values.map(_historyCard),
+      ],
+    );
+  }
+
+  Widget _historyCard(HistoryEntry entry) {
+    final Completion completion = entry.completion;
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.check_circle_outline),
+        title: Text(entry.task.name),
+        subtitle: Text(
+          '${entry.asset?.name ?? 'No asset'}${entry.room == null ? '' : ' • ${entry.room!.name}'}\n'
+          'Completed ${completion.actualDate} • scheduled ${completion.scheduledDate}\n'
+          '${completion.notes ?? 'No notes'}'
+          '${completion.parts == null ? '' : '\nParts: ${completion.parts}'}'
+          '${completion.cost == null ? '' : '\nCost: ${_formatMoney(completion.cost!)}'}\n'
+          'Revision ${completion.revision} • ${completion.revisedAtUtc.toIso8601String()}',
+        ),
+        isThreeLine: true,
+        onTap: () => _completionDetail(entry),
+      ),
     );
   }
 
@@ -412,19 +511,39 @@ class _WorkflowScreenState extends State<WorkflowScreen> {
       padding: const EdgeInsets.all(16),
       children: <Widget>[
         _setupHeader('Home profile', () => _editHome(null), 'Add home'),
-        ...snapshot.homes.map(
-          (HomeProfile value) => ListTile(
-            leading: const Icon(Icons.home_outlined),
-            title: Text(value.name),
-            subtitle: value.addressLabel == null
-                ? null
-                : Text(value.addressLabel!),
-            trailing: IconButton(
-              tooltip: 'Edit ${value.name}',
-              onPressed: () => _editHome(value),
-              icon: const Icon(Icons.edit_outlined),
+        ...snapshot.homes.expand(
+          (HomeProfile value) => <Widget>[
+            ListTile(
+              leading: const Icon(Icons.home_outlined),
+              title: Text(value.name),
+              subtitle: value.addressLabel == null
+                  ? null
+                  : Text(value.addressLabel!),
+              trailing: IconButton(
+                tooltip: 'Edit ${value.name}',
+                onPressed: () => _editHome(value),
+                icon: const Icon(Icons.edit_outlined),
+              ),
             ),
-          ),
+            if (widget.attachments != null)
+              FutureBuilder<int>(
+                future: widget.attachments!.storageUsed(value.id),
+                builder: (BuildContext context, AsyncSnapshot<int> total) =>
+                    ListTile(
+                      leading: const Icon(Icons.storage_outlined),
+                      title: Text('Private attachment storage — ${value.name}'),
+                      subtitle: Text(
+                        total.hasData
+                            ? 'Total: ${_formatBytes(total.data!)}'
+                            : 'Calculating total…',
+                      ),
+                      trailing: TextButton(
+                        onPressed: () => _cleanupAttachments(value),
+                        child: Text('Clean up ${value.name}'),
+                      ),
+                    ),
+              ),
+          ],
         ),
         const Divider(),
         _setupHeader('Rooms', () => _editRoom(home, null), 'Add room'),
@@ -452,6 +571,8 @@ class _WorkflowScreenState extends State<WorkflowScreen> {
           (Asset value) => ListTile(
             leading: const Icon(Icons.handyman_outlined),
             title: Text(value.name),
+            subtitle: const Text('Open chronological asset history'),
+            onTap: () => _assetDetail(snapshot, value),
             trailing: IconButton(
               tooltip: 'Edit ${value.name}',
               onPressed: () => _editAsset(home, snapshot, value),
@@ -670,6 +791,341 @@ class _WorkflowScreenState extends State<WorkflowScreen> {
     );
     if (confirmed == true) {
       await _run(() => widget.workflow.deleteTask(task.id));
+    }
+  }
+
+  Future<void> _editDateRange() async {
+    final String? from = await _nameDialog(
+      title: 'Completion date range',
+      label: 'From (YYYY-MM-DD, optional)',
+      initial: _historyFrom?.toString() ?? '',
+      validator: _optionalDateValidator,
+    );
+    if (from == null || !mounted) return;
+    final String? to = await _nameDialog(
+      title: 'Completion date range',
+      label: 'To (YYYY-MM-DD, optional)',
+      initial: _historyTo?.toString() ?? '',
+      validator: _optionalDateValidator,
+    );
+    if (to == null || !mounted) return;
+    setState(() {
+      _historyFrom = from.trim().isEmpty ? null : LocalDate.parse(from);
+      _historyTo = to.trim().isEmpty ? null : LocalDate.parse(to);
+    });
+  }
+
+  Future<void> _assetDetail(WorkflowSnapshot snapshot, Asset asset) async {
+    final List<HistoryEntry> entries = snapshot.history(
+      HistoryFilter(assetId: asset.id),
+    );
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => Scaffold(
+          appBar: AppBar(title: Text(asset.name)),
+          body: entries.isEmpty
+              ? const _EmptyState(
+                  title: 'No asset history',
+                  body: 'Completed work linked to this asset will appear here.',
+                )
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: <Widget>[
+                    Text(
+                      'Chronological timeline',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    ...entries.map(_historyCard),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _completionDetail(HistoryEntry entry) async {
+    final List<Completion> revisions = await widget.workflow
+        .completionRevisions(entry.completion.id);
+    final List<AttachmentMetadata> metadata = await widget.workflow.repository
+        .attachmentsForCompletion(entry.completion.id);
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(entry.task.name),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text('Scheduled ${entry.completion.scheduledDate}'),
+                const SizedBox(height: 12),
+                Text(
+                  'Revision history',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                ...revisions.reversed.map((Completion value) {
+                  final Completion? previous = value.revision <= 1
+                      ? null
+                      : revisions[value.revision - 2];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      'Revision ${value.revision}${value == revisions.last ? ' • current' : ' • previous'}',
+                    ),
+                    subtitle: Text(_revisionValues(value, previous)),
+                  );
+                }),
+                Text(
+                  'Private attachments',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                if (metadata.isEmpty) const Text('No attachments'),
+                ...metadata.map(
+                  (AttachmentMetadata value) =>
+                      _attachmentTile(value, dialogContext),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: <Widget>[
+          if (widget.attachments != null)
+            PopupMenuButton<AttachmentSource>(
+              tooltip: 'Attach a private file',
+              onSelected: (AttachmentSource source) {
+                Navigator.pop(dialogContext);
+                unawaited(_attach(entry, source));
+              },
+              itemBuilder: (_) => const <PopupMenuEntry<AttachmentSource>>[
+                PopupMenuItem(
+                  value: AttachmentSource.camera,
+                  child: Text('Take photo'),
+                ),
+                PopupMenuItem(
+                  value: AttachmentSource.photoLibrary,
+                  child: Text('Choose photo'),
+                ),
+                PopupMenuItem(
+                  value: AttachmentSource.document,
+                  child: Text('Choose document'),
+                ),
+              ],
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[Icon(Icons.attach_file), Text('Attach')],
+                ),
+              ),
+            ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              _correctCompletion(entry.completion);
+            },
+            child: const Text('Correct completion'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _attachmentTile(AttachmentMetadata value, BuildContext dialogContext) {
+    if (widget.attachments == null) {
+      return ListTile(title: Text(value.caption ?? value.mediaType));
+    }
+    return FutureBuilder<AttachmentInspection>(
+      future: widget.attachments!.inspect(value),
+      builder: (BuildContext context, AsyncSnapshot<AttachmentInspection> state) {
+        final AttachmentInspection? inspection = state.data;
+        final String health = inspection == null
+            ? 'Checking…'
+            : inspection.health.name;
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(
+            inspection?.health == AttachmentHealth.available
+                ? Icons.attachment
+                : Icons.warning_amber,
+          ),
+          title: Text(value.caption ?? value.mediaType),
+          subtitle: Text(
+            '$health${inspection == null ? '' : ' • ${_formatBytes(inspection.bytes)}'}',
+          ),
+          trailing: IconButton(
+            tooltip:
+                'Remove attachment metadata and its unreferenced private file',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () async {
+              final bool confirmed =
+                  await showDialog<bool>(
+                    context: dialogContext,
+                    builder: (BuildContext context) => AlertDialog(
+                      title: const Text('Remove attachment?'),
+                      content: const Text(
+                        'This removes the attachment from this completion and '
+                        'deletes its private copy when nothing else references it.',
+                      ),
+                      actions: <Widget>[
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Remove attachment'),
+                        ),
+                      ],
+                    ),
+                  ) ??
+                  false;
+              if (!confirmed || !dialogContext.mounted) return;
+              Object? removalError;
+              var metadataRemoved = false;
+              try {
+                await widget.attachments!.removeMetadata(value);
+                metadataRemoved = true;
+              } catch (error) {
+                removalError = error;
+                try {
+                  metadataRemoved =
+                      !(await widget.workflow.repository.attachments()).any(
+                        (AttachmentMetadata item) => item.id == value.id,
+                      );
+                } catch (_) {
+                  // The removal error is the useful failure to report. A
+                  // failed status check only means the outcome is uncertain.
+                }
+              }
+              if (dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+              await _reload();
+              if (!mounted) return;
+              final String message;
+              if (removalError == null) {
+                message =
+                    'Attachment removed from history and private storage.';
+              } else if (metadataRemoved) {
+                message =
+                    'Attachment removed from history, but its private file could not be fully cleaned up: $removalError';
+              } else {
+                message =
+                    'Could not remove the attachment. It may still appear in history: $removalError';
+              }
+              ScaffoldMessenger.of(this.context)
+                  .showSnackBar(SnackBar(content: Text(message)));
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _attach(HistoryEntry entry, AttachmentSource source) async {
+    final String? caption = await _nameDialog(
+      title: 'Attach privately',
+      label: 'Caption (optional)',
+      initial: '',
+      validator: (_) => null,
+    );
+    if (caption == null || !mounted) return;
+    AttachmentMetadata? attached;
+    await _run(() async {
+      attached = await widget.attachments!.attach(
+        homeId: entry.home.id,
+        completionId: entry.completion.id,
+        source: source,
+        caption: caption,
+      );
+    });
+    if (mounted && attached == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No attachment was added. The selection was cancelled or access was denied.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _correctCompletion(Completion current) async {
+    final _CompletionResult? result = await showDialog<_CompletionResult>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) => _CompletionDialog(
+        today: current.actualDate,
+        initial: current,
+        title: 'Correct completion',
+        submitLabel: 'Append correction',
+      ),
+    );
+    if (result == null) return;
+    await _run(
+      () => widget.workflow.reviseCompletion(
+        current: current,
+        actualDate: result.actualDate,
+        notes: result.notes,
+        parts: result.parts,
+        cost: result.cost,
+      ),
+    );
+  }
+
+  Future<void> _cleanupAttachments(HomeProfile home) async {
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: Text('Clean up attachments for ${home.name}?'),
+            content: Text(
+              'Only unreferenced files for ${home.name} will be removed. '
+              'Files linked to maintenance history will be kept.',
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Clean up files'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+    try {
+      final int removed = await widget.attachments!.cleanup(home.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Cleanup removed ${_formatBytes(removed)} of unreferenced files. Referenced files were kept.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not finish attachment cleanup for ${home.name}. Some unreferenced files may remain: $error',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() {});
     }
   }
 
@@ -1250,8 +1706,16 @@ class _CompletionResult {
 }
 
 class _CompletionDialog extends StatefulWidget {
-  const _CompletionDialog({required this.today});
+  const _CompletionDialog({
+    required this.today,
+    this.initial,
+    this.title = 'Complete upkeep',
+    this.submitLabel = 'Record completion',
+  });
   final LocalDate today;
+  final Completion? initial;
+  final String title;
+  final String submitLabel;
 
   @override
   State<_CompletionDialog> createState() => _CompletionDialogState();
@@ -1260,12 +1724,22 @@ class _CompletionDialog extends StatefulWidget {
 class _CompletionDialogState extends State<_CompletionDialog> {
   final GlobalKey<FormState> _form = GlobalKey<FormState>();
   late final TextEditingController _date = TextEditingController(
-    text: widget.today.toIso8601String(),
+    text: (widget.initial?.actualDate ?? widget.today).toIso8601String(),
   );
-  final TextEditingController _notes = TextEditingController();
-  final TextEditingController _parts = TextEditingController();
-  final TextEditingController _cost = TextEditingController();
-  final TextEditingController _currency = TextEditingController(text: 'USD');
+  late final TextEditingController _notes = TextEditingController(
+    text: widget.initial?.notes ?? '',
+  );
+  late final TextEditingController _parts = TextEditingController(
+    text: widget.initial?.parts ?? '',
+  );
+  late final TextEditingController _cost = TextEditingController(
+    text: widget.initial?.cost == null
+        ? ''
+        : _moneyInput(widget.initial!.cost!),
+  );
+  late final TextEditingController _currency = TextEditingController(
+    text: widget.initial?.cost?.currency ?? 'USD',
+  );
 
   @override
   void dispose() {
@@ -1279,7 +1753,7 @@ class _CompletionDialogState extends State<_CompletionDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Complete upkeep'),
+    title: Text(widget.title),
     content: SizedBox(
       width: 440,
       child: SingleChildScrollView(
@@ -1356,7 +1830,7 @@ class _CompletionDialogState extends State<_CompletionDialog> {
     ),
     actions: <Widget>[
       TextButton(onPressed: _cancel, child: const Text('Cancel')),
-      FilledButton(onPressed: _save, child: const Text('Record completion')),
+      FilledButton(onPressed: _save, child: Text(widget.submitLabel)),
     ],
   );
 
@@ -1423,6 +1897,9 @@ String? _dateValidator(String? value) {
   }
 }
 
+String? _optionalDateValidator(String? value) =>
+    value == null || value.trim().isEmpty ? null : _dateValidator(value);
+
 String? _emptyToNull(String value) =>
     value.trim().isEmpty ? null : value.trim();
 
@@ -1437,6 +1914,34 @@ String _formatMoney(Money value) {
   final String amount =
       '${absolute ~/ 100}.${(absolute % 100).toString().padLeft(2, '0')}';
   return '${value.currency} ${value.minorUnits < 0 ? '-' : ''}$amount';
+}
+
+String _moneyInput(Money value) {
+  final int absolute = value.minorUnits.abs();
+  return '${value.minorUnits < 0 ? '-' : ''}${absolute ~/ 100}.${(absolute % 100).toString().padLeft(2, '0')}';
+}
+
+String _formatBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KiB';
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MiB';
+}
+
+String _revisionValues(Completion value, Completion? previous) {
+  String shown(String label, Object? current, Object? old) => previous == null
+      ? '$label: ${current ?? 'None'}'
+      : '$label: ${current ?? 'None'} (previously ${old ?? 'None'})';
+  return <String>[
+    shown('Actual', value.actualDate, previous?.actualDate),
+    shown('Notes', value.notes, previous?.notes),
+    shown('Parts', value.parts, previous?.parts),
+    shown(
+      'Cost',
+      value.cost == null ? null : _formatMoney(value.cost!),
+      previous?.cost == null ? null : _formatMoney(previous!.cost!),
+    ),
+    'Revised ${value.revisedAtUtc.toIso8601String()}',
+  ].join('\n');
 }
 
 String _recurrenceLabel(RecurrencePolicy value) => switch (value) {

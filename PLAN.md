@@ -74,6 +74,10 @@ The scheduling engine is pure Dart and receives an explicit clock/time-zone cont
 - Build asset timeline, search, filters, completion corrections, and cost/parts fields.
 - Add user-initiated camera/photo/file attachment adapters with app-private copies.
 
+Implemented in issue #4 using the anticipated schema-v2 revision and attachment
+tables; see `docs/history-attachments.md` for sorting, privacy, integrity, and
+cleanup behavior.
+
 ### M5 — Portability and privacy
 
 - Implement CSV history export and versioned ZIP backup/restore.

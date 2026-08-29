@@ -4,7 +4,10 @@ import 'package:drift/native.dart';
 import 'package:flutter/widgets.dart';
 import 'package:upkeep_log/adapters/database/drift_upkeep_repository.dart';
 import 'package:upkeep_log/adapters/database/upkeep_database.dart';
+import 'package:upkeep_log/adapters/platform_attachment_picker.dart';
 import 'package:upkeep_log/adapters/platform_storage_path.dart';
+import 'package:upkeep_log/adapters/private_attachment_store.dart';
+import 'package:upkeep_log/application/attachment_service.dart';
 import 'package:upkeep_log/application/upkeep_workflow.dart';
 import 'package:upkeep_log/domain/domain.dart';
 import 'package:upkeep_log/presentation/upkeep_log_app.dart';
@@ -17,11 +20,17 @@ Future<void> main() async {
   final UpkeepDatabase database = UpkeepDatabase(
     NativeDatabase.createInBackground(databaseFile),
   );
+  final DriftUpkeepRepository repository = DriftUpkeepRepository(database);
+  var attachmentCounter = 0;
   runApp(
     UpkeepLogApp(
-      workflow: UpkeepWorkflow(
-        DriftUpkeepRepository(database),
-        clock: const SystemClock(),
+      workflow: UpkeepWorkflow(repository, clock: const SystemClock()),
+      attachments: AttachmentService(
+        repository: repository,
+        store: PrivateAttachmentStore(support),
+        picker: const PlatformAttachmentPicker(),
+        idFactory: (String kind) =>
+            '$kind-${DateTime.now().toUtc().microsecondsSinceEpoch}-${attachmentCounter++}',
       ),
     ),
   );

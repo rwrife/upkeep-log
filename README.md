@@ -98,20 +98,23 @@ The MVP must work with TalkBack and VoiceOver, support dynamic text without clip
 
 ## Current status
 
-**Primary local workflow.** The repository pins Flutter 3.47.1 and includes
+**History and private attachments.** The repository pins Flutter 3.47.1 and includes
 immutable domain entities, deterministic date-only recurrence, a schema-v2
 Drift/SQLite adapter, and an accessible mobile workflow for home/room/asset/task
 setup, Due/Upcoming/Completed views, snooze, and transactional completion with
-notes, parts, and cost. Notifications, attachments on disk, exports, and other
-later workflows remain backlog work. No signed package or store release is
-claimed.
+notes, parts, and cost. Completed work has deterministic local search, asset
+timelines, append-only corrections, and app-private camera/photo/document
+attachments with checksums, health reporting, per-home storage totals, and
+reference-safe cleanup. Picker access begins only from Attach. Notifications,
+exports, backup/restore, and other later workflows remain backlog work. No
+signed package or store release is claimed.
 
 ### Milestones
 
 1. Reproducible Flutter skeleton and CI — scaffolded; CI is the platform-build gate
 2. Tested local domain, scheduling engine, and schema-v2 persistence — complete
 3. Accessible due/completion workflow — complete
-4. Asset history, search, and attachments
+4. Asset history, search, and attachments — complete
 5. Backup/restore, CSV export, and privacy controls
 6. Platform builds and release-readiness checks
 
