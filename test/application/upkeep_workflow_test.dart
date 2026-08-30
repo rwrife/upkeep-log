@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:upkeep_log/adapters/database/drift_upkeep_repository.dart';
 import 'package:upkeep_log/adapters/database/upkeep_database.dart'
     hide Completion, TaskOccurrence, TaskTemplate;
+import 'package:upkeep_log/application/reminder_coordinator.dart';
 import 'package:upkeep_log/application/upkeep_workflow.dart';
 import 'package:upkeep_log/domain/domain.dart';
 
@@ -149,4 +150,101 @@ void main() {
       expect(await repository.latestCompletion('c'), isNull);
     },
   );
+
+  test('reminder side effects follow persisted task lifecycle', () async {
+    final _WorkflowReminderAdapter adapter = _WorkflowReminderAdapter();
+    final ReminderCoordinator reminders = ReminderCoordinator(
+      repository: repository,
+      adapter: adapter,
+      clock: clock,
+    );
+    final UpkeepWorkflow remindedWorkflow = UpkeepWorkflow(
+      repository,
+      clock: clock,
+      reminders: reminders,
+      idFactory: (String kind) => '$kind-${sequence++}',
+    );
+    await remindedWorkflow.saveHome(HomeProfile(id: 'h', name: 'Home'));
+    final TaskTemplate task = TaskTemplate(
+      id: 't',
+      homeId: 'h',
+      name: 'Filter',
+      startDate: LocalDate(2026, 2, 2),
+      recurrence: MonthlyRecurrence(),
+      reminder: ReminderIntent(
+        hour: 9,
+        minute: 0,
+        timeZoneId: 'America/New_York',
+      ),
+    );
+
+    await remindedWorkflow.createTask(task, requestReminderPermission: true);
+    expect(adapter.permissionRequests, 1);
+    expect(adapter.latest.single.date, LocalDate(2026, 2, 2));
+
+    TaskOccurrence occurrence = (await repository.occurrences()).single;
+    await remindedWorkflow.snooze(occurrence, LocalDate(2026, 2, 5));
+    expect(adapter.latest.single.date, LocalDate(2026, 2, 5));
+
+    occurrence = (await repository.occurrences()).single;
+    await remindedWorkflow.complete(
+      occurrence: occurrence,
+      actualDate: LocalDate(2026, 2, 2),
+    );
+    expect(adapter.latest.single.date, LocalDate(2026, 3, 2));
+
+    await remindedWorkflow.updateTask(
+      TaskTemplate(
+        id: task.id,
+        homeId: task.homeId,
+        name: task.name,
+        startDate: task.startDate,
+        recurrence: task.recurrence,
+        reminder: task.reminder,
+        paused: true,
+      ),
+    );
+    expect(adapter.latest, isEmpty);
+
+    final UpkeepWorkflow restarted = UpkeepWorkflow(
+      repository,
+      clock: clock,
+      reminders: reminders,
+    );
+    await restarted.load();
+    expect(adapter.latest, isEmpty);
+  });
+}
+
+final class _WorkflowReminderAdapter implements ReminderAdapter {
+  int permissionRequests = 0;
+  ReminderPermission permission = ReminderPermission.notDetermined;
+  List<ReminderScheduleRequest> latest = <ReminderScheduleRequest>[];
+
+  @override
+  Future<String> currentTimeZoneId() async => 'America/New_York';
+
+  @override
+  Future<ReminderPermission> permissionStatus() async => permission;
+
+  @override
+  Future<ReminderPermission> requestPermission() async {
+    permissionRequests++;
+    permission = ReminderPermission.granted;
+    return permission;
+  }
+
+  @override
+  Future<ReminderDeliveryReport> replaceAll(
+    List<ReminderScheduleRequest> requests,
+  ) async {
+    latest = List<ReminderScheduleRequest>.of(requests);
+    return ReminderDeliveryReport(
+      scheduledCount: latest.length,
+      limitation: 'OS controlled.',
+    );
+  }
+
+  @override
+  Future<void> openSettings() async {}
 }

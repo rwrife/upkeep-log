@@ -69,6 +69,10 @@ The scheduling engine is pure Dart and receives an explicit clock/time-zone cont
 - Add task/asset editors and transactional completion flow.
 - Add permissionless operation before notification or photo features are enabled.
 
+Local reminders are implemented in issue #5 as a disposable projection of persisted
+intent. Authorization is requested only after explicit enablement; denial never
+blocks the due workflow. See `docs/reminders.md` for lifecycle and platform limits.
+
 ### M4 — History and attachments
 
 - Build asset timeline, search, filters, completion corrections, and cost/parts fields.

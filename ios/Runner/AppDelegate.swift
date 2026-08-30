@@ -3,6 +3,7 @@ import AVFoundation
 import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate,
@@ -71,6 +72,123 @@ import UniformTypeIdentifiers
       case "photoLibrary": self.openPhotos()
       case "document": self.openDocuments()
       default: self.finishAttachment(FlutterError(code: "invalid_source", message: "Unknown source", details: nil))
+      }
+    }
+    let reminderChannel = FlutterMethodChannel(
+      name: "upkeep_log/reminders",
+      binaryMessenger: registrar.messenger()
+    )
+    reminderChannel.setMethodCallHandler { [weak self] call, result in
+      guard let self else { return }
+      switch call.method {
+      case "getTimeZoneId":
+        result(TimeZone.current.identifier)
+      case "getPermissionStatus":
+        self.notificationPermissionStatus(result)
+      case "requestPermission":
+        self.requestNotificationPermission(result)
+      case "replaceAll":
+        guard let arguments = call.arguments as? [String: Any],
+          let reminders = arguments["reminders"] as? [[String: Any]] else {
+          result(FlutterError(code: "invalid_reminders", message: "Missing reminders", details: nil))
+          return
+        }
+        self.replaceReminders(reminders, result: result)
+      case "openSettings":
+        guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else {
+          result(FlutterError(code: "settings_unavailable", message: "Notification settings are unavailable", details: nil))
+          return
+        }
+        UIApplication.shared.open(url) { opened in
+          opened ? result(nil) : result(FlutterError(code: "settings_unavailable", message: "Could not open notification settings", details: nil))
+        }
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func notificationPermissionStatus(_ result: @escaping FlutterResult) {
+    UNUserNotificationCenter.current().getNotificationSettings { settings in
+      let value: String
+      switch settings.authorizationStatus {
+      case .authorized, .provisional, .ephemeral: value = "granted"
+      case .denied: value = "denied"
+      case .notDetermined: value = "notDetermined"
+      @unknown default: value = "unsupported"
+      }
+      DispatchQueue.main.async { result(value) }
+    }
+  }
+
+  private func requestNotificationPermission(_ result: @escaping FlutterResult) {
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { [weak self] _, error in
+      guard let self else { return }
+      if let error {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "permission_failed", message: error.localizedDescription, details: nil))
+        }
+      } else {
+        self.notificationPermissionStatus(result)
+      }
+    }
+  }
+
+  private func replaceReminders(_ reminders: [[String: Any]], result: @escaping FlutterResult) {
+    let center = UNUserNotificationCenter.current()
+    center.getPendingNotificationRequests { requests in
+      center.removePendingNotificationRequests(
+        withIdentifiers: requests.map(\.identifier).filter { $0.hasPrefix("upkeep.") }
+      )
+      let group = DispatchGroup()
+      let lock = NSLock()
+      var scheduled = 0
+      var failureMessage: String?
+      for reminder in reminders {
+        guard let id = reminder["id"] as? String,
+          let title = reminder["title"] as? String,
+          let year = reminder["year"] as? Int,
+          let month = reminder["month"] as? Int,
+          let day = reminder["day"] as? Int,
+          let hour = reminder["hour"] as? Int,
+          let minute = reminder["minute"] as? Int,
+          let timeZoneId = reminder["timeZoneId"] as? String else {
+          failureMessage = "A reminder field is missing"
+          continue
+        }
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .gregorian)
+        components.timeZone = TimeZone(identifier: timeZoneId) ?? .current
+        components.year = year
+        components.month = month
+        components.day = day
+        components.hour = hour
+        components.minute = minute
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        guard let next = trigger.nextTriggerDate(), next > Date() else { continue }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = "Upkeep is due. Open Upkeep Log for current status. Reminders are convenience aids and may be delayed by iOS."
+        content.sound = .default
+        group.enter()
+        center.add(
+          UNNotificationRequest(identifier: "upkeep.\(id)", content: content, trigger: trigger)
+        ) { error in
+          lock.lock()
+          if let error { failureMessage = error.localizedDescription } else { scheduled += 1 }
+          lock.unlock()
+          group.leave()
+        }
+      }
+      group.notify(queue: .main) {
+        if let failureMessage {
+          result(FlutterError(code: "schedule_failed", message: failureMessage, details: nil))
+        } else {
+          result([
+            "scheduledCount": scheduled,
+            "limitation": "iOS controls final notification delivery and may delay or suppress alerts.",
+          ])
+        }
       }
     }
   }

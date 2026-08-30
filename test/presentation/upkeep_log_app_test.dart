@@ -5,6 +5,7 @@ import 'package:upkeep_log/adapters/database/drift_upkeep_repository.dart';
 import 'package:upkeep_log/adapters/database/upkeep_database.dart'
     hide Asset, Completion, Room, TaskOccurrence, TaskTemplate;
 import 'package:upkeep_log/application/attachment_service.dart';
+import 'package:upkeep_log/application/reminder_coordinator.dart';
 import 'package:upkeep_log/application/upkeep_workflow.dart';
 import 'package:upkeep_log/domain/domain.dart';
 import 'package:upkeep_log/presentation/upkeep_log_app.dart';
@@ -48,6 +49,71 @@ void main() {
     expect(find.text('Create home profile'), findsOneWidget);
     semantics.dispose();
   });
+
+  testWidgets(
+    'reminders stay opt-in, explain limits, and expose denied settings recovery',
+    (WidgetTester tester) async {
+      final _WidgetReminderAdapter adapter = _WidgetReminderAdapter();
+      workflow = UpkeepWorkflow(
+        repository,
+        clock: FakeClock(
+          DateTime.utc(2026, 4, 10, 12),
+          today: LocalDate(2026, 4, 10),
+          timeZoneId: 'America/New_York',
+        ),
+        reminders: ReminderCoordinator(
+          repository: repository,
+          adapter: adapter,
+          clock: FakeClock(
+            DateTime.utc(2026, 4, 10, 12),
+            today: LocalDate(2026, 4, 10),
+            timeZoneId: 'America/New_York',
+          ),
+        ),
+        idFactory: (String kind) => '$kind-${sequence++}',
+      );
+      await workflow.saveHome(HomeProfile(id: 'h', name: 'Home'));
+      await tester.pumpWidget(UpkeepLogApp(workflow: workflow));
+      await tester.pumpAndSettle();
+      expect(adapter.permissionRequests, 0);
+
+      await tester.tap(find.text('Setup'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Add task'), 300);
+      await tester.tap(find.text('Add task'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Task name'),
+        'Change filter',
+      );
+      await tester.tap(find.text('Enable a local reminder'));
+      await tester.pumpAndSettle();
+
+      expect(adapter.permissionRequests, 0);
+      expect(find.textContaining('convenience aid'), findsOneWidget);
+      expect(
+        find.textContaining('permission is requested only'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Save task'));
+      await tester.pumpAndSettle();
+
+      expect(adapter.permissionRequests, 1);
+      expect((await repository.tasks()).single.reminder!.hour, 9);
+      expect(
+        (await repository.tasks()).single.reminder!.timeZoneId,
+        'America/New_York',
+      );
+      await tester.drag(find.byType(ListView), const Offset(0, 1000));
+      await tester.pumpAndSettle();
+      expect(find.text('Local reminders'), findsOneWidget);
+      expect(find.textContaining('Due lists still work'), findsOneWidget);
+      expect(find.text('Open notification settings'), findsOneWidget);
+      await tester.tap(find.text('Open notification settings'));
+      await tester.pump();
+      expect(adapter.settingsOpens, 1);
+    },
+  );
 
   testWidgets('create to due to complete workflow records all details', (
     WidgetTester tester,
@@ -438,6 +504,38 @@ Future<void> _seedCorrectedAssetHistory(
       revisedAtUtc: DateTime.utc(2026, 4, 3),
     ),
   );
+}
+
+final class _WidgetReminderAdapter implements ReminderAdapter {
+  int permissionRequests = 0;
+  int settingsOpens = 0;
+  ReminderPermission permission = ReminderPermission.notDetermined;
+
+  @override
+  Future<String> currentTimeZoneId() async => 'America/New_York';
+
+  @override
+  Future<ReminderPermission> permissionStatus() async => permission;
+
+  @override
+  Future<ReminderPermission> requestPermission() async {
+    permissionRequests++;
+    permission = ReminderPermission.denied;
+    return permission;
+  }
+
+  @override
+  Future<ReminderDeliveryReport> replaceAll(
+    List<ReminderScheduleRequest> requests,
+  ) async => ReminderDeliveryReport(
+    scheduledCount: requests.length,
+    limitation: 'Delivery timing is controlled by the operating system.',
+  );
+
+  @override
+  Future<void> openSettings() async {
+    settingsOpens++;
+  }
 }
 
 final class _CancellingPicker implements AttachmentPicker {

@@ -1,6 +1,7 @@
 import 'package:upkeep_log/domain/domain.dart';
 
 import 'history.dart';
+import 'reminder_coordinator.dart';
 import 'upkeep_repository.dart';
 
 typedef IdFactory = String Function(String kind);
@@ -80,11 +81,16 @@ final class WorkflowSnapshot {
 
 /// Application use cases for the due-to-completion vertical workflow.
 final class UpkeepWorkflow {
-  UpkeepWorkflow(this.repository, {required this.clock, IdFactory? idFactory})
-    : _idFactory = idFactory ?? _defaultId;
+  UpkeepWorkflow(
+    this.repository, {
+    required this.clock,
+    this.reminders,
+    IdFactory? idFactory,
+  }) : _idFactory = idFactory ?? _defaultId;
 
   final UpkeepRepository repository;
   final Clock clock;
+  final ReminderCoordinator? reminders;
   final IdFactory _idFactory;
   final ScheduleEngine _schedule = const ScheduleEngine();
 
@@ -92,37 +98,57 @@ final class UpkeepWorkflow {
   static String _defaultId(String kind) =>
       '$kind-${DateTime.now().toUtc().microsecondsSinceEpoch}-${_counter++}';
 
-  Future<WorkflowSnapshot> load() async => WorkflowSnapshot(
-    homes: await repository.homes(),
-    rooms: await repository.rooms(),
-    assets: await repository.assets(),
-    tasks: await repository.tasks(),
-    occurrences: await repository.occurrences(),
-    completions: await repository.completions(),
-    today: clock.today,
-  );
+  ReminderStatus? get reminderStatus => reminders?.status;
+
+  Future<WorkflowSnapshot> load() async {
+    await _reconcileReminders();
+    return WorkflowSnapshot(
+      homes: await repository.homes(),
+      rooms: await repository.rooms(),
+      assets: await repository.assets(),
+      tasks: await repository.tasks(),
+      occurrences: await repository.occurrences(),
+      completions: await repository.completions(),
+      today: clock.today,
+    );
+  }
 
   Future<void> saveHome(HomeProfile value) => repository.saveHome(value);
   Future<void> saveRoom(Room value) => repository.saveRoom(value);
   Future<void> saveAsset(Asset value) => repository.saveAsset(value);
 
-  Future<void> createTask(TaskTemplate task) =>
-      repository.saveTaskWithOccurrence(
-        task,
-        TaskOccurrence(
-          id: _idFactory('occurrence'),
-          taskTemplateId: task.id,
-          scheduledDate: task.startDate,
-        ),
-      );
+  Future<void> createTask(
+    TaskTemplate task, {
+    bool requestReminderPermission = false,
+  }) async {
+    await repository.saveTaskWithOccurrence(
+      task,
+      TaskOccurrence(
+        id: _idFactory('occurrence'),
+        taskTemplateId: task.id,
+        scheduledDate: task.startDate,
+      ),
+    );
+    await _reconcileReminders(
+      requestPermission: requestReminderPermission && task.reminder != null,
+    );
+  }
 
-  Future<void> updateTask(TaskTemplate task) => repository.saveTask(task);
+  Future<void> updateTask(
+    TaskTemplate task, {
+    bool requestReminderPermission = false,
+  }) async {
+    await repository.saveTask(task);
+    await _reconcileReminders(
+      requestPermission: requestReminderPermission && task.reminder != null,
+    );
+  }
 
-  Future<void> snooze(TaskOccurrence occurrence, LocalDate until) {
+  Future<void> snooze(TaskOccurrence occurrence, LocalDate until) async {
     if (occurrence.state != OccurrenceState.pending) {
       throw StateError('Only pending upkeep can be snoozed');
     }
-    return repository.saveOccurrence(
+    await repository.saveOccurrence(
       TaskOccurrence(
         id: occurrence.id,
         taskTemplateId: occurrence.taskTemplateId,
@@ -130,6 +156,7 @@ final class UpkeepWorkflow {
         snoozedUntil: until,
       ),
     );
+    await _reconcileReminders();
   }
 
   Future<void> complete({
@@ -172,6 +199,7 @@ final class UpkeepWorkflow {
               scheduledDate: nextDate,
             ),
     );
+    await _reconcileReminders();
   }
 
   Future<void> reviseCompletion({
@@ -203,7 +231,24 @@ final class UpkeepWorkflow {
   Future<List<Completion>> completionRevisions(String id) =>
       repository.completionHistory(id);
 
-  Future<void> deleteTask(String id) => repository.deleteTask(id);
+  Future<void> deleteTask(String id) async {
+    await repository.deleteTask(id);
+    await _reconcileReminders();
+  }
+
+  Future<ReminderStatus?> refreshReminders({bool requestPermission = false}) =>
+      _reconcileReminders(requestPermission: requestPermission);
+
+  Future<void> openReminderSettings() async {
+    await reminders?.openSettings();
+  }
+
+  Future<String> reminderTimeZoneId() async =>
+      await reminders?.currentTimeZoneId() ?? clock.timeZoneId;
+
+  Future<ReminderStatus?> _reconcileReminders({
+    bool requestPermission = false,
+  }) async => reminders?.reconcile(requestPermission: requestPermission);
 }
 
 String? _optional(String? value) {
