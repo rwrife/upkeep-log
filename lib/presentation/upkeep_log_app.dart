@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:upkeep_log/application/attachment_service.dart';
 import 'package:upkeep_log/application/history.dart';
+import 'package:upkeep_log/application/reminder_coordinator.dart';
 import 'package:upkeep_log/application/upkeep_workflow.dart';
 import 'package:upkeep_log/domain/domain.dart';
 
@@ -46,7 +47,8 @@ class WorkflowScreen extends StatefulWidget {
   State<WorkflowScreen> createState() => _WorkflowScreenState();
 }
 
-class _WorkflowScreenState extends State<WorkflowScreen> {
+class _WorkflowScreenState extends State<WorkflowScreen>
+    with WidgetsBindingObserver {
   WorkflowSnapshot? _snapshot;
   Object? _error;
   Future<void> Function()? _retryOperation;
@@ -64,7 +66,21 @@ class _WorkflowScreenState extends State<WorkflowScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_reload());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_loading) {
+      unawaited(_reload());
+    }
   }
 
   String _id(String kind) =>
@@ -510,6 +526,8 @@ class _WorkflowScreenState extends State<WorkflowScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
+        if (widget.workflow.reminders != null) _reminderStatusTile(),
+        if (widget.workflow.reminders != null) const Divider(),
         _setupHeader('Home profile', () => _editHome(null), 'Add home'),
         ...snapshot.homes.expand(
           (HomeProfile value) => <Widget>[
@@ -592,7 +610,9 @@ class _WorkflowScreenState extends State<WorkflowScreen> {
             leading: const Icon(Icons.task_alt_outlined),
             title: Text(value.name),
             subtitle: Text(
-              'Starts ${value.startDate} • ${_recurrenceLabel(value.recurrence)}',
+              'Starts ${value.startDate} • ${_recurrenceLabel(value.recurrence)}'
+              '${value.paused ? ' • Paused' : ''}'
+              '${value.reminder == null ? ' • Reminder off' : ' • Reminder ${_twoDigits(value.reminder!.hour)}:${_twoDigits(value.reminder!.minute)} ${value.reminder!.timeZoneId}'}',
             ),
             trailing: Wrap(
               children: <Widget>[
@@ -611,6 +631,23 @@ class _WorkflowScreenState extends State<WorkflowScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _reminderStatusTile() {
+    final ReminderStatus? status = widget.workflow.reminderStatus;
+    return ListTile(
+      leading: const Icon(Icons.notifications_active_outlined),
+      title: const Text('Local reminders'),
+      subtitle: Text(
+        status?.message ?? 'Checking notification availability. Due lists remain the source of truth.',
+      ),
+      trailing: status?.permission == ReminderPermission.denied
+          ? TextButton(
+              onPressed: () => widget.workflow.openReminderSettings(),
+              child: const Text('Open notification settings'),
+            )
+          : null,
     );
   }
 
@@ -695,11 +732,16 @@ class _WorkflowScreenState extends State<WorkflowScreen> {
     WorkflowSnapshot snapshot,
     TaskTemplate? existing,
   ) async {
+    final String reminderTimeZoneId =
+        existing?.reminder?.timeZoneId ??
+        await widget.workflow.reminderTimeZoneId();
+    if (!mounted) return;
     final _TaskResult? result = await showDialog<_TaskResult>(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) => _TaskDialog(
         today: snapshot.today,
+        timeZoneId: reminderTimeZoneId,
         rooms: snapshot.rooms,
         assets: snapshot.assets,
         existing: existing,
@@ -714,11 +756,21 @@ class _WorkflowScreenState extends State<WorkflowScreen> {
       name: result.name,
       startDate: result.startDate,
       recurrence: result.recurrence,
+      reminder: result.reminder,
+      paused: result.paused,
     );
+    final bool explicitlyEnabledReminder =
+        result.reminder != null && existing?.reminder == null;
     await _run(
       () => existing == null
-          ? widget.workflow.createTask(task)
-          : widget.workflow.updateTask(task),
+          ? widget.workflow.createTask(
+              task,
+              requestReminderPermission: explicitlyEnabledReminder,
+            )
+          : widget.workflow.updateTask(
+              task,
+              requestReminderPermission: explicitlyEnabledReminder,
+            ),
     );
   }
 
@@ -1454,12 +1506,16 @@ class _TaskResult {
     required this.name,
     required this.startDate,
     required this.recurrence,
+    required this.reminder,
+    required this.paused,
     this.roomId,
     this.assetId,
   });
   final String name;
   final LocalDate startDate;
   final RecurrencePolicy recurrence;
+  final ReminderIntent? reminder;
+  final bool paused;
   final String? roomId;
   final String? assetId;
 }
@@ -1467,11 +1523,13 @@ class _TaskResult {
 class _TaskDialog extends StatefulWidget {
   const _TaskDialog({
     required this.today,
+    required this.timeZoneId,
     required this.rooms,
     required this.assets,
     required this.existing,
   });
   final LocalDate today;
+  final String timeZoneId;
   final List<Room> rooms;
   final List<Asset> assets;
   final TaskTemplate? existing;
@@ -1491,10 +1549,18 @@ class _TaskDialogState extends State<_TaskDialog> {
   late final TextEditingController _interval = TextEditingController(
     text: _existingInterval.toString(),
   );
+  late final TextEditingController _reminderHour = TextEditingController(
+    text: (widget.existing?.reminder?.hour ?? 9).toString(),
+  );
+  late final TextEditingController _reminderMinute = TextEditingController(
+    text: (widget.existing?.reminder?.minute ?? 0).toString().padLeft(2, '0'),
+  );
   late _RecurrenceKind _kind = _existingKind;
   late bool _actualAnchor =
       widget.existing?.recurrence.anchor ==
       RecurrenceAnchor.actualCompletionDate;
+  late bool _reminderEnabled = widget.existing?.reminder != null;
+  late bool _paused = widget.existing?.paused ?? false;
   late String? _roomId = widget.existing?.roomId;
   late String? _assetId = widget.existing?.assetId;
 
@@ -1518,6 +1584,8 @@ class _TaskDialogState extends State<_TaskDialog> {
     _name.dispose();
     _date.dispose();
     _interval.dispose();
+    _reminderHour.dispose();
+    _reminderMinute.dispose();
     super.dispose();
   }
 
@@ -1598,6 +1666,65 @@ class _TaskDialogState extends State<_TaskDialog> {
                 ),
               ],
               const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _paused,
+                onChanged: (bool value) => setState(() => _paused = value),
+                title: const Text('Pause this task'),
+                subtitle: const Text(
+                  'Paused tasks stay in your log but do not schedule reminders.',
+                ),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _reminderEnabled,
+                onChanged: (bool value) =>
+                    setState(() => _reminderEnabled = value),
+                title: const Text('Enable a local reminder'),
+                subtitle: const Text(
+                  'A convenience aid only; delivery may be delayed or suppressed by the operating system.',
+                ),
+              ),
+              if (_reminderEnabled) ...<Widget>[
+                const Text(
+                  'Notification permission is requested only after you save this enabled reminder. Due lists keep working if access is denied.',
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(
+                      child: TextFormField(
+                        controller: _reminderHour,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Reminder hour (0–23)',
+                        ),
+                        validator: (String? value) =>
+                            _integerRangeValidator(value, 0, 23),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _reminderMinute,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Minute (0–59)',
+                        ),
+                        validator: (String? value) =>
+                            _integerRangeValidator(value, 0, 59),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Saved time zone: ${widget.timeZoneId}'),
+                ),
+              ],
+              const SizedBox(height: 12),
               DropdownButtonFormField<String?>(
                 initialValue: _roomId,
                 decoration: const InputDecoration(labelText: 'Room (optional)'),
@@ -1668,6 +1795,14 @@ class _TaskDialogState extends State<_TaskDialog> {
         name: _name.text.trim(),
         startDate: LocalDate.parse(_date.text),
         recurrence: recurrence,
+        reminder: _reminderEnabled
+            ? ReminderIntent(
+                hour: int.parse(_reminderHour.text),
+                minute: int.parse(_reminderMinute.text),
+                timeZoneId: widget.timeZoneId,
+              )
+            : null,
+        paused: _paused,
         roomId: _roomId,
         assetId: _assetId,
       ),
@@ -1684,6 +1819,11 @@ class _TaskDialogState extends State<_TaskDialog> {
         _actualAnchor ==
             (existing?.recurrence.anchor ==
                 RecurrenceAnchor.actualCompletionDate) &&
+        _reminderEnabled == (existing?.reminder != null) &&
+        _reminderHour.text == (existing?.reminder?.hour ?? 9).toString() &&
+        _reminderMinute.text ==
+            (existing?.reminder?.minute ?? 0).toString().padLeft(2, '0') &&
+        _paused == (existing?.paused ?? false) &&
         _roomId == existing?.roomId &&
         _assetId == existing?.assetId;
     if (unchanged || await _confirmDiscard(context)) {
@@ -1896,6 +2036,15 @@ String? _dateValidator(String? value) {
     return 'Enter a valid date as YYYY-MM-DD';
   }
 }
+
+String? _integerRangeValidator(String? value, int minimum, int maximum) {
+  final int? parsed = int.tryParse(value?.trim() ?? '');
+  return parsed == null || parsed < minimum || parsed > maximum
+      ? 'Enter $minimum–$maximum'
+      : null;
+}
+
+String _twoDigits(int value) => value.toString().padLeft(2, '0');
 
 String? _optionalDateValidator(String? value) =>
     value == null || value.trim().isEmpty ? null : _dateValidator(value);

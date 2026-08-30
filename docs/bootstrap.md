@@ -75,5 +75,6 @@ storage and launches the local-first workflow. History search, append-only
 completion corrections, and private attachment handling are implemented and
 tested. Android camera and system-document intents and iOS camera, PHPicker,
 and document picker are narrow platform-channel adapters; they are invoked only
-from an explicit Attach action. Notifications and exports belong to later
-issues.
+from an explicit Attach action. Opt-in local reminders use native platform
+channels and are rebuilt from persisted task intent; see `docs/reminders.md`.
+Exports belong to later issues.

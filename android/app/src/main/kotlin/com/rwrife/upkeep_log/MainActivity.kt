@@ -6,19 +6,24 @@ import android.content.ClipData
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
+import android.provider.Settings
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.time.ZoneId
 
 class MainActivity : FlutterActivity() {
     private var pendingResult: MethodChannel.Result? = null
     private var pendingSource: String? = null
     private var pendingCameraFile: File? = null
+    private var pendingReminderPermissionResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -50,6 +55,74 @@ class MainActivity : FlutterActivity() {
                 else -> finishError("invalid_source", "Unknown attachment source")
             }
         }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "upkeep_log/reminders",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getTimeZoneId" -> result.success(ZoneId.systemDefault().id)
+                "getPermissionStatus" -> result.success(notificationPermissionStatus())
+                "requestPermission" -> requestNotificationPermission(result)
+                "replaceAll" -> {
+                    try {
+                        val reminders = call.argument<List<Map<String, Any?>>>("reminders")
+                            ?: emptyList()
+                        val count = ReminderScheduler.replaceAll(this, reminders)
+                        result.success(
+                            mapOf(
+                                "scheduledCount" to count,
+                                "limitation" to "Android may delay inexact alarms because of battery and device policy.",
+                            ),
+                        )
+                    } catch (error: Exception) {
+                        result.error("schedule_failed", error.message, null)
+                    }
+                }
+                "openSettings" -> {
+                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                    startActivity(intent)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun notificationPermissionStatus(): String {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            val requested = getSharedPreferences(REMINDER_PERMISSION_PREFERENCES, MODE_PRIVATE)
+                .getBoolean(REMINDER_PERMISSION_REQUESTED, false)
+            return if (requested) "denied" else "notDetermined"
+        }
+        return if (NotificationManagerCompat.from(this).areNotificationsEnabled()) "granted" else "denied"
+    }
+
+    private fun requestNotificationPermission(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            result.success(notificationPermissionStatus())
+            return
+        }
+        if (pendingReminderPermissionResult != null) {
+            result.error("permission_busy", "A notification permission request is already active", null)
+            return
+        }
+        pendingReminderPermissionResult = result
+        getSharedPreferences(REMINDER_PERMISSION_PREFERENCES, MODE_PRIVATE)
+            .edit()
+            .putBoolean(REMINDER_PERMISSION_REQUESTED, true)
+            .apply()
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            NOTIFICATION_PERMISSION,
+        )
     }
 
     private fun openCamera() {
@@ -99,6 +172,11 @@ class MainActivity : FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == NOTIFICATION_PERMISSION) {
+            pendingReminderPermissionResult?.success(notificationPermissionStatus())
+            pendingReminderPermissionResult = null
+            return
+        }
         if (requestCode != CAMERA_PERMISSION) return
         if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) openCamera()
         else finishError("permission_denied", "Camera permission was denied")
@@ -166,5 +244,8 @@ class MainActivity : FlutterActivity() {
         private const val CAMERA_PERMISSION = 801
         private const val PICK_CAMERA = 802
         private const val PICK_DOCUMENT = 803
+        private const val NOTIFICATION_PERMISSION = 804
+        private const val REMINDER_PERMISSION_PREFERENCES = "upkeep_reminders"
+        private const val REMINDER_PERMISSION_REQUESTED = "permission_requested"
     }
 }

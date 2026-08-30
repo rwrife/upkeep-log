@@ -98,15 +98,17 @@ The MVP must work with TalkBack and VoiceOver, support dynamic text without clip
 
 ## Current status
 
-**History and private attachments.** The repository pins Flutter 3.47.1 and includes
+**Local reminders, history, and private attachments.** The repository pins Flutter 3.47.1 and includes
 immutable domain entities, deterministic date-only recurrence, a schema-v2
 Drift/SQLite adapter, and an accessible mobile workflow for home/room/asset/task
 setup, Due/Upcoming/Completed views, snooze, and transactional completion with
 notes, parts, and cost. Completed work has deterministic local search, asset
 timelines, append-only corrections, and app-private camera/photo/document
 attachments with checksums, health reporting, per-home storage totals, and
-reference-safe cleanup. Picker access begins only from Attach. Notifications,
-exports, backup/restore, and other later workflows remain backlog work. No
+reference-safe cleanup. Picker access begins only from Attach. Opt-in Android/iOS
+local reminders are rebuilt from persisted task intent, request permission only
+after explicit enablement, and degrade to the complete in-app due list when denied.
+Exports, backup/restore, and other later workflows remain backlog work. No
 signed package or store release is claimed.
 
 ### Milestones
@@ -115,8 +117,9 @@ signed package or store release is claimed.
 2. Tested local domain, scheduling engine, and schema-v2 persistence — complete
 3. Accessible due/completion workflow — complete
 4. Asset history, search, and attachments — complete
-5. Backup/restore, CSV export, and privacy controls
-6. Platform builds and release-readiness checks
+5. Opt-in local reminders with graceful denial — complete
+6. Backup/restore, CSV export, and privacy controls
+7. Platform builds and release-readiness checks
 
 ## Development quickstart
 
@@ -139,7 +142,8 @@ See [bootstrap and verification](docs/bootstrap.md) for platform build commands
 and host limitations, and [architecture boundaries](docs/architecture.md) for
 the enforced dependency rules. See
 [the primary workflow](docs/primary-workflow.md) for status, transaction, and
-accessibility behavior.
+accessibility behavior, and [local reminder behavior](docs/reminders.md) for
+permission, rescheduling, reboot, time-zone, and delivery-limit details.
 
 ## License
 
