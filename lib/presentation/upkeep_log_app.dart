@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:upkeep_log/application/attachment_service.dart';
+import 'package:upkeep_log/application/data_portability.dart';
 import 'package:upkeep_log/application/history.dart';
 import 'package:upkeep_log/application/reminder_coordinator.dart';
 import 'package:upkeep_log/application/upkeep_workflow.dart';
@@ -9,10 +10,18 @@ import 'package:upkeep_log/domain/domain.dart';
 
 /// Root widget for the local-first Upkeep Log application.
 class UpkeepLogApp extends StatelessWidget {
-  const UpkeepLogApp({required this.workflow, this.attachments, super.key});
+  const UpkeepLogApp({
+    required this.workflow,
+    this.attachments,
+    this.portability,
+    this.dataTransfer,
+    super.key,
+  });
 
   final UpkeepWorkflow workflow;
   final AttachmentService? attachments;
+  final DataPortability? portability;
+  final DataTransfer? dataTransfer;
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +31,12 @@ class UpkeepLogApp extends StatelessWidget {
       theme: _theme(Brightness.light, const Color(0xFF2E6F5E)),
       darkTheme: _theme(Brightness.dark, const Color(0xFF74C7AD)),
       themeMode: ThemeMode.system,
-      home: WorkflowScreen(workflow: workflow, attachments: attachments),
+      home: WorkflowScreen(
+        workflow: workflow,
+        attachments: attachments,
+        portability: portability,
+        dataTransfer: dataTransfer,
+      ),
     );
   }
 
@@ -38,10 +52,18 @@ class UpkeepLogApp extends StatelessWidget {
 }
 
 class WorkflowScreen extends StatefulWidget {
-  const WorkflowScreen({required this.workflow, this.attachments, super.key});
+  const WorkflowScreen({
+    required this.workflow,
+    this.attachments,
+    this.portability,
+    this.dataTransfer,
+    super.key,
+  });
 
   final UpkeepWorkflow workflow;
   final AttachmentService? attachments;
+  final DataPortability? portability;
+  final DataTransfer? dataTransfer;
 
   @override
   State<WorkflowScreen> createState() => _WorkflowScreenState();
@@ -62,11 +84,13 @@ class _WorkflowScreenState extends State<WorkflowScreen>
   HistoryStatus _historyStatus = HistoryStatus.all;
   LocalDate? _historyFrom;
   LocalDate? _historyTo;
+  Future<LocalStorageSummary>? _storageSummary;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _storageSummary = widget.portability?.storageSummary();
     unawaited(_reload());
   }
 
@@ -93,7 +117,14 @@ class _WorkflowScreenState extends State<WorkflowScreen>
     });
     try {
       final WorkflowSnapshot value = await widget.workflow.load();
-      if (mounted) setState(() => _snapshot = value);
+      final Future<LocalStorageSummary>? storage = widget.portability
+          ?.storageSummary();
+      if (mounted) {
+        setState(() {
+          _snapshot = value;
+          _storageSummary = storage;
+        });
+      }
     } catch (error) {
       if (mounted) setState(() => _error = error);
     } finally {
@@ -164,6 +195,11 @@ class _WorkflowScreenState extends State<WorkflowScreen>
                   selectedIcon: Icon(Icons.tune),
                   label: 'Setup',
                 ),
+                NavigationDestination(
+                  icon: Icon(Icons.privacy_tip_outlined),
+                  selectedIcon: Icon(Icons.privacy_tip),
+                  label: 'Data',
+                ),
               ],
             ),
     );
@@ -220,7 +256,8 @@ class _WorkflowScreenState extends State<WorkflowScreen>
               emptyBody: 'Future upkeep will appear here after you create a recurring task.',
             ),
             2 => _completedPage(snapshot),
-            _ => _setupPage(snapshot),
+            3 => _setupPage(snapshot),
+            _ => _dataPage(snapshot),
           },
         ),
       ],
@@ -633,6 +670,332 @@ class _WorkflowScreenState extends State<WorkflowScreen>
       ],
     );
   }
+
+  Widget _dataPage(WorkflowSnapshot snapshot) {
+    final bool available =
+        widget.portability != null && widget.dataTransfer != null;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: <Widget>[
+        Semantics(
+          header: true,
+          child: Text(
+            'Privacy & data',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Upkeep Log stores its database and attachments only in app-private storage. It has no account, analytics, ads, or network sync.',
+        ),
+        if (widget.portability != null)
+          FutureBuilder<LocalStorageSummary>(
+            future: _storageSummary,
+            builder: (context, storage) {
+              if (storage.hasError) {
+                return const ListTile(
+                  leading: Icon(Icons.storage_outlined),
+                  title: Text('Local storage usage unavailable'),
+                );
+              }
+              if (!storage.hasData) {
+                return const ListTile(
+                  leading: Icon(Icons.storage_outlined),
+                  title: Text('Calculating local storage usage…'),
+                );
+              }
+              final LocalStorageSummary value = storage.data!;
+              final Map<String, String> names = <String, String>{
+                for (final home in snapshot.homes) home.id: home.name,
+              };
+              final String homes = value.attachmentBytesByHome.entries
+                  .map(
+                    (entry) =>
+                        '${names[entry.key] ?? entry.key}: ${_formatBytes(entry.value)}',
+                  )
+                  .join(' • ');
+              return Semantics(
+                label:
+                    'Local storage ${_formatBytes(value.totalBytes)}, database ${_formatBytes(value.databaseBytes)}, attachments ${_formatBytes(value.attachmentBytes)}',
+                child: ListTile(
+                  leading: const Icon(Icons.storage_outlined),
+                  title: Text(
+                    'Local storage: ${_formatBytes(value.totalBytes)}',
+                  ),
+                  subtitle: Text(
+                    'Database: ${_formatBytes(value.databaseBytes)} • Attachments: ${_formatBytes(value.attachmentBytes)}${homes.isEmpty ? '' : '\n$homes'}',
+                  ),
+                ),
+              );
+            },
+          ),
+        const ListTile(
+          leading: Icon(Icons.notifications_outlined),
+          title: Text('Notifications'),
+          subtitle: Text(
+            'Requested only when you explicitly enable a reminder. Manage status in Setup.',
+          ),
+        ),
+        const ListTile(
+          leading: Icon(Icons.camera_alt_outlined),
+          title: Text('Camera and photos'),
+          subtitle: Text(
+            'Access begins only when you choose Attach. Document selection needs no broad storage permission.',
+          ),
+        ),
+        const Divider(),
+        ListTile(
+          leading: const Icon(Icons.table_view_outlined),
+          title: const Text('Export CSV history'),
+          subtitle: const Text(
+            'UTF-8 CSV with stable IDs, date-only fields, costs, and correction revisions.',
+          ),
+          enabled: available,
+          onTap: available ? () => _exportCsv() : null,
+        ),
+        ListTile(
+          leading: const Icon(Icons.archive_outlined),
+          title: const Text('Export full backup'),
+          subtitle: const Text(
+            'ZIP with versioned JSON and checksum-verified attachments.',
+          ),
+          enabled: available,
+          onTap: available ? _exportBackup : null,
+        ),
+        ListTile(
+          leading: const Icon(Icons.restore_outlined),
+          title: const Text('Restore backup'),
+          subtitle: const Text(
+            'Creates and verifies a local recovery copy, offers it through the share sheet, validates the selected backup in staging, then replaces local data atomically.',
+          ),
+          enabled: available,
+          onTap: available ? _restoreBackup : null,
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'Exports can contain private addresses, serial numbers in names or notes, costs, notes, and photos. Review them before sharing.',
+          ),
+        ),
+        const Divider(),
+        Semantics(
+          header: true,
+          child: Text(
+            'Selected history exports',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ),
+        ...snapshot.homes.map(
+          (home) => ListTile(
+            leading: const Icon(Icons.home_outlined),
+            title: Text('Export ${home.name} history'),
+            subtitle: const Text('CSV limited to this home.'),
+            enabled: available,
+            onTap: available ? () => _exportCsv(homeId: home.id) : null,
+          ),
+        ),
+        ...snapshot.assets.map(
+          (asset) => ListTile(
+            leading: const Icon(Icons.handyman_outlined),
+            title: Text('Export ${asset.name} history'),
+            subtitle: const Text('CSV limited to this asset.'),
+            enabled: available,
+            onTap: available ? () => _exportCsv(assetId: asset.id) : null,
+          ),
+        ),
+        const Divider(),
+        ...snapshot.homes.map(
+          (home) => ListTile(
+            leading: const Icon(Icons.delete_outline),
+            title: Text('Delete ${home.name} data'),
+            subtitle: const Text(
+              'Permanently removes this home, all history, and private attachments.',
+            ),
+            enabled: available,
+            onTap: available ? () => _deleteHomeData(home) : null,
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.delete_forever),
+          title: const Text('Full reset'),
+          subtitle: const Text(
+            'Permanently removes every home, history record, and attachment.',
+          ),
+          textColor: Theme.of(context).colorScheme.error,
+          iconColor: Theme.of(context).colorScheme.error,
+          enabled: available,
+          onTap: available ? _resetAllData : null,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _exportCsv({String? homeId, String? assetId}) async {
+    try {
+      final bytes = await widget.portability!.exportCsv(
+        homeId: homeId,
+        assetId: assetId,
+      );
+      final result = await widget.dataTransfer!.exportFile(
+        suggestedName: 'upkeep-history.csv',
+        mediaType: 'text/csv',
+        bytes: bytes,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.status == TransferStatus.cancelled
+                ? 'CSV export cancelled.'
+                : 'CSV prepared for export.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('CSV export failed: $error')));
+      }
+    }
+  }
+
+  Future<void> _exportBackup() async {
+    if (!await _confirm(
+      'Export private backup?',
+      'The ZIP can contain addresses, costs, notes, serials, and photos. Store and share it carefully.',
+      'Export backup',
+    )) {
+      return;
+    }
+    try {
+      final bytes = await widget.portability!.createBackup();
+      final result = await widget.dataTransfer!.exportFile(
+        suggestedName: 'upkeep-log-backup.zip',
+        mediaType: 'application/zip',
+        bytes: bytes,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result.status == TransferStatus.cancelled
+                  ? 'Backup export cancelled.'
+                  : 'Backup prepared for export.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Backup failed: $error')));
+      }
+    }
+  }
+
+  Future<void> _restoreBackup() async {
+    if (!await _confirm(
+      'Restore and replace local data?',
+      'A verified local pre-restore recovery copy will be prepared and offered through the share sheet first. Android cannot confirm that another app retained the offered file, so save it explicitly if you want a copy outside Upkeep Log. The selected backup must pass all schema, reference, path, size, and checksum checks.',
+      'Continue',
+    )) {
+      return;
+    }
+    try {
+      final before = await widget.portability!.createBackup();
+      final backup = await widget.dataTransfer!.exportFile(
+        suggestedName: 'upkeep-pre-restore-backup.zip',
+        mediaType: 'application/zip',
+        bytes: before,
+      );
+      if (backup.status == TransferStatus.cancelled || backup.path == null) {
+        return;
+      }
+      final selected = await widget.dataTransfer!.importBackup();
+      if (selected.status == TransferStatus.cancelled ||
+          selected.path == null) {
+        return;
+      }
+      final report = await widget.portability!.restorePaths(
+        selected.path!,
+        preRestoreBackupPath: backup.path!,
+      );
+      await _reload();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Restored ${report.homeCount} homes and ${report.attachmentCount} attachments. ${report.conflictCount} existing home IDs were replaced.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Restore failed: $error')));
+      }
+    }
+  }
+
+  Future<void> _deleteHomeData(HomeProfile home) async {
+    if (!await _confirm(
+      'Permanently delete ${home.name}?',
+      'This removes its tasks, completed history, and private attachments. Export a backup first if needed.',
+      'Delete home data',
+    )) {
+      return;
+    }
+    try {
+      await widget.portability!.deleteHomeData(home.id);
+      await _reload();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Delete failed: $error')));
+      }
+    }
+  }
+
+  Future<void> _resetAllData() async {
+    if (!await _confirm(
+      'Permanently reset Upkeep Log?',
+      'Every home, task, completion revision, and attachment on this device will be removed. Export a backup first if needed.',
+      'Reset all data',
+    )) {
+      return;
+    }
+    try {
+      await widget.portability!.resetAllData();
+      setState(() => _page = 0);
+      await _reload();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Reset failed: $error')));
+      }
+    }
+  }
+
+  Future<bool> _confirm(String title, String body, String action) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(title),
+          content: Text(body),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(action),
+            ),
+          ],
+        ),
+      ) ??
+      false;
 
   Widget _reminderStatusTile() {
     final ReminderStatus? status = widget.workflow.reminderStatus;

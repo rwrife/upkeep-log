@@ -2,12 +2,15 @@ import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter/widgets.dart';
+import 'package:upkeep_log/adapters/data_portability_service.dart';
 import 'package:upkeep_log/adapters/database/drift_upkeep_repository.dart';
 import 'package:upkeep_log/adapters/database/upkeep_database.dart';
 import 'package:upkeep_log/adapters/platform_attachment_picker.dart';
+import 'package:upkeep_log/adapters/platform_data_transfer.dart';
 import 'package:upkeep_log/adapters/platform_reminder_adapter.dart';
 import 'package:upkeep_log/adapters/platform_storage_path.dart';
 import 'package:upkeep_log/adapters/private_attachment_store.dart';
+import 'package:upkeep_log/application/application_mutation_gate.dart';
 import 'package:upkeep_log/application/attachment_service.dart';
 import 'package:upkeep_log/application/reminder_coordinator.dart';
 import 'package:upkeep_log/application/upkeep_workflow.dart';
@@ -30,6 +33,13 @@ Future<void> main() async {
     clock: clock,
   );
   var attachmentCounter = 0;
+  final ApplicationMutationGate mutationGate = ApplicationMutationGate();
+  final DataPortabilityService portability = DataPortabilityService(
+    repository: repository,
+    privateRoot: support,
+    mutationGate: mutationGate,
+  );
+  await portability.recoverInterruptedRestore();
   runApp(
     UpkeepLogApp(
       workflow: UpkeepWorkflow(repository, clock: clock, reminders: reminders),
@@ -39,7 +49,10 @@ Future<void> main() async {
         picker: const PlatformAttachmentPicker(),
         idFactory: (String kind) =>
             '$kind-${DateTime.now().toUtc().microsecondsSinceEpoch}-${attachmentCounter++}',
+        mutationGate: mutationGate,
       ),
+      portability: portability,
+      dataTransfer: const PlatformDataTransfer(),
     ),
   );
 }

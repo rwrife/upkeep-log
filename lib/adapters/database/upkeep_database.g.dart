@@ -3358,6 +3358,209 @@ class AttachmentMetadataRowsCompanion
   }
 }
 
+class $RestoreMetadataTable extends RestoreMetadata
+    with TableInfo<$RestoreMetadataTable, RestoreMetadataData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RestoreMetadataTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _singletonMeta = const VerificationMeta(
+    'singleton',
+  );
+  @override
+  late final GeneratedColumn<int> singleton = GeneratedColumn<int>(
+    'singleton',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tokenMeta = const VerificationMeta('token');
+  @override
+  late final GeneratedColumn<String> token = GeneratedColumn<String>(
+    'token',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [singleton, token];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'restore_metadata';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RestoreMetadataData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('singleton')) {
+      context.handle(
+        _singletonMeta,
+        singleton.isAcceptableOrUnknown(data['singleton']!, _singletonMeta),
+      );
+    }
+    if (data.containsKey('token')) {
+      context.handle(
+        _tokenMeta,
+        token.isAcceptableOrUnknown(data['token']!, _tokenMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tokenMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {singleton};
+  @override
+  RestoreMetadataData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RestoreMetadataData(
+      singleton: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}singleton'],
+      )!,
+      token: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}token'],
+      )!,
+    );
+  }
+
+  @override
+  $RestoreMetadataTable createAlias(String alias) {
+    return $RestoreMetadataTable(attachedDatabase, alias);
+  }
+}
+
+class RestoreMetadataData extends DataClass
+    implements Insertable<RestoreMetadataData> {
+  final int singleton;
+  final String token;
+  const RestoreMetadataData({required this.singleton, required this.token});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['singleton'] = Variable<int>(singleton);
+    map['token'] = Variable<String>(token);
+    return map;
+  }
+
+  RestoreMetadataCompanion toCompanion(bool nullToAbsent) {
+    return RestoreMetadataCompanion(
+      singleton: Value(singleton),
+      token: Value(token),
+    );
+  }
+
+  factory RestoreMetadataData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RestoreMetadataData(
+      singleton: serializer.fromJson<int>(json['singleton']),
+      token: serializer.fromJson<String>(json['token']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'singleton': serializer.toJson<int>(singleton),
+      'token': serializer.toJson<String>(token),
+    };
+  }
+
+  RestoreMetadataData copyWith({int? singleton, String? token}) =>
+      RestoreMetadataData(
+        singleton: singleton ?? this.singleton,
+        token: token ?? this.token,
+      );
+  RestoreMetadataData copyWithCompanion(RestoreMetadataCompanion data) {
+    return RestoreMetadataData(
+      singleton: data.singleton.present ? data.singleton.value : this.singleton,
+      token: data.token.present ? data.token.value : this.token,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RestoreMetadataData(')
+          ..write('singleton: $singleton, ')
+          ..write('token: $token')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(singleton, token);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RestoreMetadataData &&
+          other.singleton == this.singleton &&
+          other.token == this.token);
+}
+
+class RestoreMetadataCompanion extends UpdateCompanion<RestoreMetadataData> {
+  final Value<int> singleton;
+  final Value<String> token;
+  const RestoreMetadataCompanion({
+    this.singleton = const Value.absent(),
+    this.token = const Value.absent(),
+  });
+  RestoreMetadataCompanion.insert({
+    this.singleton = const Value.absent(),
+    required String token,
+  }) : token = Value(token);
+  static Insertable<RestoreMetadataData> custom({
+    Expression<int>? singleton,
+    Expression<String>? token,
+  }) {
+    return RawValuesInsertable({
+      if (singleton != null) 'singleton': singleton,
+      if (token != null) 'token': token,
+    });
+  }
+
+  RestoreMetadataCompanion copyWith({
+    Value<int>? singleton,
+    Value<String>? token,
+  }) {
+    return RestoreMetadataCompanion(
+      singleton: singleton ?? this.singleton,
+      token: token ?? this.token,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (singleton.present) {
+      map['singleton'] = Variable<int>(singleton.value);
+    }
+    if (token.present) {
+      map['token'] = Variable<String>(token.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RestoreMetadataCompanion(')
+          ..write('singleton: $singleton, ')
+          ..write('token: $token')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$UpkeepDatabase extends GeneratedDatabase {
   _$UpkeepDatabase(QueryExecutor e) : super(e);
   $UpkeepDatabaseManager get managers => $UpkeepDatabaseManager(this);
@@ -3373,6 +3576,9 @@ abstract class _$UpkeepDatabase extends GeneratedDatabase {
       $CompletionRevisionsTable(this);
   late final $AttachmentMetadataRowsTable attachmentMetadataRows =
       $AttachmentMetadataRowsTable(this);
+  late final $RestoreMetadataTable restoreMetadata = $RestoreMetadataTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3386,6 +3592,7 @@ abstract class _$UpkeepDatabase extends GeneratedDatabase {
     completions,
     completionRevisions,
     attachmentMetadataRows,
+    restoreMetadata,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -6751,6 +6958,149 @@ typedef $$AttachmentMetadataRowsTableProcessedTableManager =
       AttachmentMetadataRow,
       PrefetchHooks Function({bool completionId})
     >;
+typedef $$RestoreMetadataTableCreateCompanionBuilder =
+    RestoreMetadataCompanion Function({
+      Value<int> singleton,
+      required String token,
+    });
+typedef $$RestoreMetadataTableUpdateCompanionBuilder =
+    RestoreMetadataCompanion Function({
+      Value<int> singleton,
+      Value<String> token,
+    });
+
+class $$RestoreMetadataTableFilterComposer
+    extends Composer<_$UpkeepDatabase, $RestoreMetadataTable> {
+  $$RestoreMetadataTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get singleton => $composableBuilder(
+    column: $table.singleton,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get token => $composableBuilder(
+    column: $table.token,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$RestoreMetadataTableOrderingComposer
+    extends Composer<_$UpkeepDatabase, $RestoreMetadataTable> {
+  $$RestoreMetadataTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get singleton => $composableBuilder(
+    column: $table.singleton,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get token => $composableBuilder(
+    column: $table.token,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$RestoreMetadataTableAnnotationComposer
+    extends Composer<_$UpkeepDatabase, $RestoreMetadataTable> {
+  $$RestoreMetadataTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get singleton =>
+      $composableBuilder(column: $table.singleton, builder: (column) => column);
+
+  GeneratedColumn<String> get token =>
+      $composableBuilder(column: $table.token, builder: (column) => column);
+}
+
+class $$RestoreMetadataTableTableManager
+    extends
+        RootTableManager<
+          _$UpkeepDatabase,
+          $RestoreMetadataTable,
+          RestoreMetadataData,
+          $$RestoreMetadataTableFilterComposer,
+          $$RestoreMetadataTableOrderingComposer,
+          $$RestoreMetadataTableAnnotationComposer,
+          $$RestoreMetadataTableCreateCompanionBuilder,
+          $$RestoreMetadataTableUpdateCompanionBuilder,
+          (
+            RestoreMetadataData,
+            BaseReferences<
+              _$UpkeepDatabase,
+              $RestoreMetadataTable,
+              RestoreMetadataData
+            >,
+          ),
+          RestoreMetadataData,
+          PrefetchHooks Function()
+        > {
+  $$RestoreMetadataTableTableManager(
+    _$UpkeepDatabase db,
+    $RestoreMetadataTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RestoreMetadataTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RestoreMetadataTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RestoreMetadataTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> singleton = const Value.absent(),
+            Value<String> token = const Value.absent(),
+          }) => RestoreMetadataCompanion(singleton: singleton, token: token),
+          createCompanionCallback:
+              ({
+                Value<int> singleton = const Value.absent(),
+                required String token,
+              }) => RestoreMetadataCompanion.insert(
+                singleton: singleton,
+                token: token,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$RestoreMetadataTableProcessedTableManager =
+    ProcessedTableManager<
+      _$UpkeepDatabase,
+      $RestoreMetadataTable,
+      RestoreMetadataData,
+      $$RestoreMetadataTableFilterComposer,
+      $$RestoreMetadataTableOrderingComposer,
+      $$RestoreMetadataTableAnnotationComposer,
+      $$RestoreMetadataTableCreateCompanionBuilder,
+      $$RestoreMetadataTableUpdateCompanionBuilder,
+      (
+        RestoreMetadataData,
+        BaseReferences<
+          _$UpkeepDatabase,
+          $RestoreMetadataTable,
+          RestoreMetadataData
+        >,
+      ),
+      RestoreMetadataData,
+      PrefetchHooks Function()
+    >;
 
 class $UpkeepDatabaseManager {
   final _$UpkeepDatabase _db;
@@ -6774,4 +7124,6 @@ class $UpkeepDatabaseManager {
         _db,
         _db.attachmentMetadataRows,
       );
+  $$RestoreMetadataTableTableManager get restoreMetadata =>
+      $$RestoreMetadataTableTableManager(_db, _db.restoreMetadata);
 }

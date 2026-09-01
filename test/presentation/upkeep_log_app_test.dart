@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +7,7 @@ import 'package:upkeep_log/adapters/database/drift_upkeep_repository.dart';
 import 'package:upkeep_log/adapters/database/upkeep_database.dart'
     hide Asset, Completion, Room, TaskOccurrence, TaskTemplate;
 import 'package:upkeep_log/application/attachment_service.dart';
+import 'package:upkeep_log/application/data_portability.dart';
 import 'package:upkeep_log/application/reminder_coordinator.dart';
 import 'package:upkeep_log/application/upkeep_workflow.dart';
 import 'package:upkeep_log/domain/domain.dart';
@@ -49,6 +52,40 @@ void main() {
     expect(find.text('Create home profile'), findsOneWidget);
     semantics.dispose();
   });
+
+  testWidgets(
+    'privacy screen explains storage, exports, and destructive controls',
+    (tester) async {
+      await workflow.saveHome(HomeProfile(id: 'h', name: 'Home'));
+      await tester.pumpWidget(
+        UpkeepLogApp(
+          workflow: workflow,
+          portability: _WidgetPortability(),
+          dataTransfer: _WidgetDataTransfer(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Data'));
+      await tester.pumpAndSettle();
+      expect(find.text('Privacy & data'), findsOneWidget);
+      expect(find.textContaining('app-private storage'), findsOneWidget);
+      expect(find.text('Local storage: 3.0 KiB'), findsOneWidget);
+      expect(find.text('Export CSV history'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Export full backup'), 150);
+      expect(find.text('Export full backup'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Restore backup'), 250);
+      expect(find.text('Restore backup'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.textContaining('private addresses'),
+        250,
+      );
+      expect(find.textContaining('private addresses'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Delete Home data'), 250);
+      expect(find.text('Delete Home data'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Full reset'), 250);
+      expect(find.text('Full reset'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'reminders stay opt-in, explain limits, and expose denied settings recovery',
@@ -548,6 +585,47 @@ final class _CancellingPicker implements AttachmentPicker {
     sources.add(source);
     return null;
   }
+}
+
+final class _WidgetPortability implements DataPortability {
+  @override
+  Future<LocalStorageSummary> storageSummary() async =>
+      const LocalStorageSummary(
+        databaseBytes: 2048,
+        attachmentBytesByHome: <String, int>{'h': 1024},
+      );
+  @override
+  Future<Uint8List> createBackup() async => Uint8List(0);
+  @override
+  Future<void> deleteHomeData(String homeId) async {}
+  @override
+  Future<Uint8List> exportCsv({String? homeId, String? assetId}) async =>
+      Uint8List(0);
+  @override
+  Future<void> resetAllData() async {}
+  @override
+  Future<RestoreReport> restorePaths(
+    String incomingPath, {
+    required String preRestoreBackupPath,
+  }) async => const RestoreReport(
+    schemaVersion: 1,
+    homeCount: 0,
+    attachmentCount: 0,
+    preRestoreBackupPath: 'before.zip',
+    conflictCount: 0,
+  );
+}
+
+final class _WidgetDataTransfer implements DataTransfer {
+  @override
+  Future<TransferResult> exportFile({
+    required String suggestedName,
+    required String mediaType,
+    required Uint8List bytes,
+  }) async => const TransferResult(TransferStatus.cancelled);
+  @override
+  Future<TransferResult> importBackup() async =>
+      const TransferResult(TransferStatus.cancelled);
 }
 
 final class _UnusedStore implements AttachmentStore {

@@ -98,7 +98,7 @@ The MVP must work with TalkBack and VoiceOver, support dynamic text without clip
 
 ## Current status
 
-**Local reminders, history, and private attachments.** The repository pins Flutter 3.47.1 and includes
+**Local reminders, history, private attachments, and portable data controls.** The repository pins Flutter 3.47.1 and includes
 immutable domain entities, deterministic date-only recurrence, a schema-v2
 Drift/SQLite adapter, and an accessible mobile workflow for home/room/asset/task
 setup, Due/Upcoming/Completed views, snooze, and transactional completion with
@@ -108,7 +108,14 @@ attachments with checksums, health reporting, per-home storage totals, and
 reference-safe cleanup. Picker access begins only from Attach. Opt-in Android/iOS
 local reminders are rebuilt from persisted task intent, request permission only
 after explicit enablement, and degrade to the complete in-app due list when denied.
-Exports, backup/restore, and other later workflows remain backlog work. No
+The Privacy & data screen exports deterministic UTF-8 CSV, creates versioned
+ZIP/JSON backups with hashed attachments, restores only after a verified local
+pre-restore recovery copy is offered for sharing and staged validation succeeds,
+and supports confirmed per-home
+deletion/full reset. Native share sheets and document pickers keep every file
+handoff explicit and require no broad storage permission. See
+[data portability and compatibility](docs/data-portability.md) for the stable
+schemas, limits, atomicity, and version policy. No
 signed package or store release is claimed.
 
 ### Milestones
@@ -118,7 +125,7 @@ signed package or store release is claimed.
 3. Accessible due/completion workflow — complete
 4. Asset history, search, and attachments — complete
 5. Opt-in local reminders with graceful denial — complete
-6. Backup/restore, CSV export, and privacy controls
+6. Backup/restore, CSV export, and privacy controls — complete
 7. Platform builds and release-readiness checks
 
 ## Development quickstart

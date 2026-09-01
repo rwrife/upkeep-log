@@ -22,6 +22,13 @@ checksums, inspection, storage totals, and reference-safe cleanup. Native picker
 paths cross these boundaries only long enough to copy the selected bytes and
 are never persisted.
 
+Portability follows the same inward dependency rule. Presentation uses
+application `DataPortability` and `DataTransfer` ports. The concrete adapter
+owns ZIP/JSON/CSV encoding, strict archive validation, private staging, and file
+rollback. Drift implements complete snapshots, transactional replacement, and
+deliberate data-control deletion. Android and iOS only perform explicit system
+share-sheet and document-picker handoffs.
+
 ## Layer rules
 
 - **Domain** is pure Dart. It owns entities, value objects, invariants,

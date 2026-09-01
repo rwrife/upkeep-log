@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:upkeep_log/application/application_mutation_gate.dart';
 import 'package:upkeep_log/application/upkeep_repository.dart';
 import 'package:upkeep_log/domain/domain.dart';
 
@@ -60,13 +61,14 @@ final class AttachmentService {
     required this.store,
     required this.picker,
     required this.idFactory,
-  });
+    ApplicationMutationGate? mutationGate,
+  }) : _mutationGate = mutationGate ?? ApplicationMutationGate();
 
   final UpkeepRepository repository;
   final AttachmentStore store;
   final AttachmentPicker picker;
   final String Function(String kind) idFactory;
-  final _AsyncGate _mutationGate = _AsyncGate();
+  final ApplicationMutationGate _mutationGate;
 
   Future<AttachmentMetadata?> attach({
     required String homeId,
@@ -170,22 +172,6 @@ final class AttachmentService {
         : await repository.taskById(occurrence.taskTemplateId);
     if (task == null || task.homeId != homeId) {
       throw StateError('Completion does not belong to the supplied home');
-    }
-  }
-}
-
-final class _AsyncGate {
-  Future<void> _tail = Future<void>.value();
-
-  Future<T> run<T>(Future<T> Function() action) async {
-    final Future<void> previous = _tail;
-    final Completer<void> released = Completer<void>();
-    _tail = released.future;
-    await previous;
-    try {
-      return await action();
-    } finally {
-      released.complete();
     }
   }
 }

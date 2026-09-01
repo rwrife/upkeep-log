@@ -15,8 +15,8 @@ void main() {
   });
   tearDown(() => database.close());
 
-  test('schema v1 performs typed hierarchy round trips', () async {
-    expect(database.schemaVersion, 2);
+  test('schema v3 performs typed hierarchy round trips', () async {
+    expect(database.schemaVersion, 3);
     await repository.saveHome(HomeProfile(id: 'h', name: 'Home'));
     await repository.saveRoom(Room(id: 'r', homeId: 'h', name: 'Kitchen'));
     await repository.saveAsset(
