@@ -20,9 +20,6 @@ import java.io.File
 import java.time.ZoneId
 
 class MainActivity : FlutterActivity() {
-    private companion object {
-        const val MAX_BACKUP_ARCHIVE_BYTES = 256L * 1024L * 1024L
-    }
     private var pendingResult: MethodChannel.Result? = null
     private var pendingSource: String? = null
     private var pendingCameraFile: File? = null
@@ -368,6 +365,7 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
+        private const val MAX_BACKUP_ARCHIVE_BYTES = 256L * 1024L * 1024L
         private const val CAMERA_PERMISSION = 801
         private const val PICK_CAMERA = 802
         private const val PICK_DOCUMENT = 803
