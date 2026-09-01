@@ -5,11 +5,16 @@ import UIKit
 import UniformTypeIdentifiers
 import UserNotifications
 
+private enum BackupImportError: Error { case tooLarge }
+
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate,
   UIImagePickerControllerDelegate, UINavigationControllerDelegate,
   PHPickerViewControllerDelegate, UIDocumentPickerDelegate {
   private var attachmentResult: FlutterResult?
+  private var dataTransferResult: FlutterResult?
+  private var importingBackup = false
+  private let maxBackupArchiveBytes: Int64 = 256 * 1024 * 1024
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -72,6 +77,71 @@ import UserNotifications
       case "photoLibrary": self.openPhotos()
       case "document": self.openDocuments()
       default: self.finishAttachment(FlutterError(code: "invalid_source", message: "Unknown source", details: nil))
+      }
+    }
+    let dataTransferChannel = FlutterMethodChannel(
+      name: "upkeep_log/data_transfer",
+      binaryMessenger: registrar.messenger()
+    )
+    dataTransferChannel.setMethodCallHandler { [weak self] call, result in
+      guard let self else { return }
+      switch call.method {
+      case "export":
+        guard self.dataTransferResult == nil else {
+          result(FlutterError(code: "transfer_busy", message: "Another data transfer is active", details: nil)); return
+        }
+        guard let arguments = call.arguments as? [String: Any],
+          let name = arguments["suggestedName"] as? String,
+          let bytes = arguments["bytes"] as? FlutterStandardTypedData else {
+          result(FlutterError(code: "invalid_export", message: "Export data is missing", details: nil)); return
+        }
+        do {
+          let safeName = name.replacingOccurrences(of: "[^A-Za-z0-9._-]", with: "_", options: .regularExpression)
+          let fileExtension = (safeName as NSString).pathExtension
+          var url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("upkeep-export-\(UUID().uuidString)")
+          if !fileExtension.isEmpty { url.appendPathExtension(fileExtension) }
+          try bytes.data.write(to: url, options: .atomic)
+          guard let presenter = self.presenter() else { throw CocoaError(.fileNoSuchFile) }
+          let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+          if let popover = controller.popoverPresentationController {
+            popover.sourceView = presenter.view
+            popover.sourceRect = CGRect(
+              x: presenter.view.bounds.midX,
+              y: presenter.view.bounds.midY,
+              width: 0,
+              height: 0
+            )
+          }
+          self.dataTransferResult = result
+          controller.completionWithItemsHandler = { [weak self] _, completed, _, error in
+            guard let self else { return }
+            if let error {
+              self.finishDataTransfer(FlutterError(code: "export_failed", message: error.localizedDescription, details: nil))
+            } else {
+              // This is only the locally prepared file; iOS cannot promise the
+              // receiving activity retained it.
+              self.finishDataTransfer(completed ? url.path : nil)
+            }
+          }
+          presenter.present(controller, animated: true)
+        } catch {
+          self.dataTransferResult = nil
+          self.importingBackup = false
+          result(FlutterError(code: "export_failed", message: error.localizedDescription, details: nil))
+        }
+      case "import":
+        guard self.dataTransferResult == nil else { result(FlutterError(code: "transfer_busy", message: "Another data transfer is active", details: nil)); return }
+        self.dataTransferResult = result
+        self.importingBackup = true
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.zip], asCopy: true)
+        picker.delegate = self
+        guard let presenter = self.presenter() else {
+          self.finishDataTransfer(FlutterError(code: "picker_unavailable", message: "No view can present the picker", details: nil))
+          return
+        }
+        presenter.present(picker, animated: true)
+      default: result(FlutterMethodNotImplemented)
       }
     }
     let reminderChannel = FlutterMethodChannel(
@@ -295,10 +365,43 @@ import UserNotifications
     }
   }
 
-  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { finishAttachment(nil) }
+  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    if importingBackup { finishDataTransfer(nil) } else { finishAttachment(nil) }
+  }
 
   func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-    guard let url = urls.first else { finishAttachment(nil); return }
+    guard let url = urls.first else {
+      if importingBackup { finishDataTransfer(nil) } else { finishAttachment(nil) }
+      return
+    }
+    if importingBackup {
+      let destination = FileManager.default.temporaryDirectory.appendingPathComponent("upkeep-import-\(UUID().uuidString).zip")
+      do {
+        let knownSize = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize
+        if let knownSize, Int64(knownSize) > maxBackupArchiveBytes { throw BackupImportError.tooLarge }
+        let input = try FileHandle(forReadingFrom: url)
+        defer { try? input.close() }
+        FileManager.default.createFile(atPath: destination.path, contents: nil)
+        let output = try FileHandle(forWritingTo: destination)
+        defer { try? output.close() }
+        var total: Int64 = 0
+        while let chunk = try input.read(upToCount: 64 * 1024), !chunk.isEmpty {
+          total += Int64(chunk.count)
+          if total > maxBackupArchiveBytes { throw BackupImportError.tooLarge }
+          try output.write(contentsOf: chunk)
+        }
+        finishDataTransfer(destination.path)
+      } catch {
+        try? FileManager.default.removeItem(at: destination)
+        let tooLarge = error is BackupImportError
+        finishDataTransfer(FlutterError(
+          code: tooLarge ? "archive_too_large" : "import_failed",
+          message: tooLarge ? "Backup archive exceeds the 256 MiB size limit" : error.localizedDescription,
+          details: nil
+        ))
+      }
+      return
+    }
     copyTemporaryFile(
       from: url,
       extension: url.pathExtension,
@@ -366,5 +469,11 @@ import UserNotifications
     }
     attachmentResult?(value)
     attachmentResult = nil
+  }
+
+  private func finishDataTransfer(_ value: Any?) {
+    dataTransferResult?(value)
+    dataTransferResult = nil
+    importingBackup = false
   }
 }

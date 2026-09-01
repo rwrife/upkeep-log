@@ -23,7 +23,7 @@ void main() {
 
       final UpkeepDatabase database = UpkeepDatabase(NativeDatabase(file));
       final DriftUpkeepRepository repository = DriftUpkeepRepository(database);
-      expect(database.schemaVersion, 2);
+      expect(database.schemaVersion, 3);
       expect((await repository.homeById('fixture-home'))!.name, 'Fixture Home');
       expect((await repository.roomById('fixture-room'))!.name, 'Kitchen');
       expect(
@@ -93,7 +93,7 @@ void main() {
   );
 
   test(
-    'migrated fixture has the same normalized v2 schema shape as fresh data',
+    'migrated fixture has the same normalized v3 schema shape as fresh data',
     () async {
       final Directory temp = await Directory.systemTemp.createTemp(
         'upkeep-shape-',

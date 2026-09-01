@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:upkeep_log/application/portable_data.dart';
 import 'package:upkeep_log/application/upkeep_repository.dart';
 import 'package:upkeep_log/domain/domain.dart' as domain;
 
@@ -469,6 +470,131 @@ final class DriftUpkeepRepository implements UpkeepRepository {
       throw StateError('Cannot delete a home with completion history');
     }
     await (db.delete(db.homes)..where((t) => t.id.equals(id))).go();
+  });
+
+  @override
+  Future<PortableData> portableData() => db.transaction(() async {
+    // Keep every table read on one SQLite snapshot. Workflow writes do not use
+    // the file-operation gate, so the database transaction is the consistency
+    // boundary that prevents a backup from mixing pre- and post-write rows.
+    final List<domain.Completion> revisions = <domain.Completion>[];
+    final List<Completion> bases = await db.select(db.completions).get();
+    for (final Completion base in bases) {
+      revisions.addAll(await completionHistory(base.id));
+    }
+    revisions.sort((a, b) {
+      final int id = a.id.compareTo(b.id);
+      return id != 0 ? id : a.revision.compareTo(b.revision);
+    });
+    return PortableData(
+      homes: await homes(),
+      rooms: await rooms(),
+      assets: await assets(),
+      tasks: await tasks(),
+      occurrences: await occurrences(),
+      completionRevisions: revisions,
+      attachments: await attachments(),
+    );
+  });
+
+  @override
+  Future<void> replacePortableData(
+    PortableData value, {
+    String? restoreToken,
+  }) => db.transaction(() async {
+    await db.delete(db.attachmentMetadataRows).go();
+    await db.delete(db.completionRevisions).go();
+    await db.delete(db.completions).go();
+    await db.delete(db.taskOccurrences).go();
+    await db.delete(db.taskTemplates).go();
+    await db.delete(db.assets).go();
+    await db.delete(db.rooms).go();
+    await db.delete(db.homes).go();
+    for (final domain.HomeProfile item in value.homes) {
+      await saveHome(item);
+    }
+    for (final domain.Room item in value.rooms) {
+      await saveRoom(item);
+    }
+    for (final domain.Asset item in value.assets) {
+      await saveAsset(item);
+    }
+    for (final domain.TaskTemplate item in value.tasks) {
+      await saveTask(item);
+    }
+    // Completed state is established by the completion trigger later.
+    for (final domain.TaskOccurrence item in value.occurrences) {
+      await saveOccurrence(
+        domain.TaskOccurrence(
+          id: item.id,
+          taskTemplateId: item.taskTemplateId,
+          scheduledDate: item.scheduledDate,
+          snoozedUntil: item.snoozedUntil,
+        ),
+      );
+    }
+    final Map<String, List<domain.Completion>> grouped =
+        <String, List<domain.Completion>>{};
+    for (final domain.Completion item in value.completionRevisions) {
+      grouped.putIfAbsent(item.id, () => <domain.Completion>[]).add(item);
+    }
+    for (final List<domain.Completion> history in grouped.values) {
+      history.sort((a, b) => a.revision.compareTo(b.revision));
+      await completeOccurrence(history.first);
+      for (final domain.Completion revision in history.skip(1)) {
+        await appendCompletionRevision(revision);
+      }
+    }
+    for (final domain.AttachmentMetadata item in value.attachments) {
+      await saveAttachment(item);
+    }
+    if (restoreToken != null) {
+      await db
+          .into(db.restoreMetadata)
+          .insertOnConflictUpdate(
+            RestoreMetadataCompanion.insert(
+              singleton: const Value(1),
+              token: restoreToken,
+            ),
+          );
+    }
+  });
+
+  @override
+  Future<String?> committedRestoreToken() async => (await (db.select(
+    db.restoreMetadata,
+  )..where((t) => t.singleton.equals(1))).getSingleOrNull())?.token;
+
+  @override
+  Future<void> clearCommittedRestoreToken(String token) async {
+    await (db.delete(
+      db.restoreMetadata,
+    )..where((t) => t.singleton.equals(1) & t.token.equals(token))).go();
+  }
+
+  @override
+  Future<List<String>> deleteHomeData(String id) => db.transaction(() async {
+    final List<QueryRow> rows = await db
+        .customSelect(
+          '''SELECT a.relative_path FROM attachment_metadata_rows a
+         JOIN completions c ON c.id = a.completion_id
+         JOIN task_occurrences o ON o.id = c.occurrence_id
+         JOIN task_templates t ON t.id = o.task_template_id
+         WHERE t.home_id = ?''',
+          variables: <Variable<Object>>[Variable<String>(id)],
+        )
+        .get();
+    await (db.delete(db.homes)..where((t) => t.id.equals(id))).go();
+    return rows.map((r) => r.read<String>('relative_path')).toList();
+  });
+
+  @override
+  Future<List<String>> resetAllData() => db.transaction(() async {
+    final List<String> paths = (await attachments())
+        .map((value) => value.relativePath)
+        .toList(growable: false);
+    await db.delete(db.homes).go();
+    return paths;
   });
 }
 

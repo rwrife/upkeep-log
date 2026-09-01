@@ -158,6 +158,17 @@ class AttachmentMetadataRows extends Table {
   ];
 }
 
+/// Internal crash-recovery state. This table is deliberately excluded from
+/// portable user data.
+class RestoreMetadata extends Table {
+  IntColumn get singleton => integer()();
+  TextColumn get token => text()();
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{singleton};
+  @override
+  List<String> get customConstraints => <String>['CHECK(singleton = 1)'];
+}
+
 @DriftDatabase(
   tables: <Type>[
     Homes,
@@ -168,12 +179,13 @@ class AttachmentMetadataRows extends Table {
     Completions,
     CompletionRevisions,
     AttachmentMetadataRows,
+    RestoreMetadata,
   ],
 )
 class UpkeepDatabase extends _$UpkeepDatabase {
   UpkeepDatabase(super.executor);
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (Migrator m) async {
@@ -184,6 +196,7 @@ class UpkeepDatabase extends _$UpkeepDatabase {
       if (from < 2) {
         await m.addColumn(completionRevisions, completionRevisions.partsText);
       }
+      if (from < 3) await m.createTable(restoreMetadata);
     },
     beforeOpen: (OpeningDetails details) async =>
         customStatement('PRAGMA foreign_keys = ON'),

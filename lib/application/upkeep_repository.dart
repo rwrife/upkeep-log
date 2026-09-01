@@ -1,5 +1,7 @@
 import 'package:upkeep_log/domain/domain.dart';
 
+import 'portable_data.dart';
+
 /// Application port for durable local upkeep records.
 abstract interface class UpkeepRepository {
   Future<List<HomeProfile>> homes();
@@ -39,4 +41,21 @@ abstract interface class UpkeepRepository {
   Future<void> deleteRoom(String id);
   Future<void> deleteTask(String id);
   Future<void> deleteHome(String id);
+  Future<PortableData> portableData();
+
+  /// Replaces all structured state and records [restoreToken] in the same
+  /// database transaction.
+  Future<void> replacePortableData(PortableData value, {String? restoreToken});
+
+  /// Token proving that the corresponding restore transaction committed.
+  Future<String?> committedRestoreToken();
+
+  /// Removes a restore token after its filesystem journal has been cleaned.
+  Future<void> clearCommittedRestoreToken(String token);
+
+  /// Deliberate privacy control; unlike [deleteHome], history is removed.
+  Future<List<String>> deleteHomeData(String id);
+
+  /// Deliberate privacy control returning attachment paths to remove.
+  Future<List<String>> resetAllData();
 }
