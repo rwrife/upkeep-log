@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Upkeep Log app icon</title>
+  <desc id="desc">A cream house and maintenance check mark on a dark teal field.</desc>
+  <rect width="1024" height="1024" rx="224" fill="#0B4F4A"/>
+  <path d="M180 492 512 214l332 278v338a70 70 0 0 1-70 70H250a70 70 0 0 1-70-70Z" fill="#FFF8E7"/>
+  <path d="M430 900V650h164v250" fill="#F1C453"/>
+  <circle cx="690" cy="630" r="158" fill="#E56B4A" stroke="#FFF8E7" stroke-width="34"/>
+  <path d="m604 628 57 58 118-133" fill="none" stroke="#FFF8E7" stroke-linecap="round" stroke-linejoin="round" stroke-width="48"/>
+</svg>

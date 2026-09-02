@@ -184,6 +184,58 @@ void main() {
     },
   );
 
+  test(
+    'simulated low storage removes partial private copy and metadata',
+    () async {
+      final File selected = File('${root.path}/low-storage-selection.tmp');
+      await selected.writeAsBytes(<int>[1, 2, 3, 4]);
+      final AttachmentService service = AttachmentService(
+        repository: repository,
+        store: PrivateAttachmentStore(
+          root,
+          contentWriter: (File source, RandomAccessFile destination) async {
+            await destination.writeFrom(<int>[1, 2]);
+            throw FileSystemException(
+              'No space left on device',
+              destination.path,
+              const OSError('No space left on device', 28),
+            );
+          },
+        ),
+        picker: _Picker(
+          PickedAttachment(
+            path: selected.path,
+            mediaType: 'application/octet-stream',
+            ownedTemporary: true,
+          ),
+        ),
+        idFactory: (_) => 'low-storage',
+      );
+
+      await expectLater(
+        service.attach(
+          homeId: 'home',
+          completionId: 'completion',
+          source: AttachmentSource.document,
+        ),
+        throwsA(
+          isA<FileSystemException>().having(
+            (FileSystemException error) => error.osError?.errorCode,
+            'errno',
+            28,
+          ),
+        ),
+      );
+
+      expect(await selected.exists(), isFalse);
+      expect(await repository.attachments(), isEmpty);
+      expect(
+        await File('${root.path}/attachments/home/low-storage.tmp').exists(),
+        isFalse,
+      );
+    },
+  );
+
   test('cleanup removes only unreferenced files', () async {
     final Directory directory = Directory('${root.path}/attachments/home');
     await directory.create(recursive: true);
