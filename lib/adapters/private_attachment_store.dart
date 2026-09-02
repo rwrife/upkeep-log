@@ -3,10 +3,20 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:upkeep_log/application/attachment_service.dart';
 
+typedef AttachmentContentWriter = Future<void> Function(
+  File source,
+  RandomAccessFile destination,
+);
+
 final class PrivateAttachmentStore implements AttachmentStore {
-  PrivateAttachmentStore(Directory root) : _root = root.absolute;
+  PrivateAttachmentStore(
+    Directory root, {
+    AttachmentContentWriter? contentWriter,
+  }) : _root = root.absolute,
+       _contentWriter = contentWriter ?? _writeContents;
 
   final Directory _root;
+  final AttachmentContentWriter _contentWriter;
 
   @override
   Future<void> discardSelection(PickedAttachment selected) async {
@@ -38,9 +48,7 @@ final class PrivateAttachmentStore implements AttachmentStore {
         mode: FileMode.writeOnly,
       );
       try {
-        await for (final List<int> chunk in source.openRead()) {
-          await output.writeFrom(chunk);
-        }
+        await _contentWriter(source, output);
       } finally {
         await output.close();
       }
@@ -64,6 +72,15 @@ final class PrivateAttachmentStore implements AttachmentStore {
       }
       await discardSelection(selected);
       Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  static Future<void> _writeContents(
+    File source,
+    RandomAccessFile destination,
+  ) async {
+    await for (final List<int> chunk in source.openRead()) {
+      await destination.writeFrom(chunk);
     }
   }
 

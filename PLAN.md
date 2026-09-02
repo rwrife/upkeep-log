@@ -38,7 +38,8 @@ The scheduling engine is pure Dart and receives an explicit clock/time-zone cont
 - **Riverpod:** explicit dependency injection and testable state; avoid global singletons.
 - **Freezed/json_serializable (candidate):** immutable versioned transfer models; adoption depends on generated-code maintenance cost during issue #1.
 - **JUnit/XCTest-backed Flutter integration tests:** exercise platform adapters where host tooling is available.
-- **GitHub Actions:** formatting, static analysis, unit/widget tests, and unsigned debug builds. iOS builds run on macOS workers.
+- **GitHub Actions:** formatting, static analysis, unit/widget tests,
+  debug-signed Android builds, and no-codesign iOS builds on macOS workers.
 
 ## Data and migration rules
 
@@ -89,8 +90,16 @@ cleanup behavior.
 
 ### M6 — Packaging
 
-- Run Android/iOS build matrix, integration tests, migration fixtures, accessibility checks, and release checklist.
-- Produce unsigned development artifacts first; signing and store publication require owner-managed credentials and review.
+- CI runs expanded unit/widget/integration output, committed migration fixtures,
+  backup/restore round trips, a fail-closed release audit, and dependency notices.
+- Android debug and iOS no-codesign builds are uploaded with exact toolchain/build
+  logs and SHA-256 manifests; a combined manifest is bound to the CI commit.
+- Store copy, privacy disclosures, branded launcher icons, visibly marked
+  screenshot placeholders, release notes, and owner-managed signing steps are
+  documented in `docs/release-checklist.md` and `docs/store-listing.md`.
+- TalkBack, VoiceOver, representative-device installation, real screenshots,
+  signed artifacts, development tags, and store publication remain explicit
+  owner gates and must never be inferred from automated tests.
 
 ## Testing strategy
 

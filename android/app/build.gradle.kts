@@ -4,6 +4,14 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val releaseSigningValues = mapOf(
+    "storeFile" to providers.environmentVariable("UPKEEP_ANDROID_KEYSTORE").orNull,
+    "storePassword" to providers.environmentVariable("UPKEEP_ANDROID_STORE_PASSWORD").orNull,
+    "keyAlias" to providers.environmentVariable("UPKEEP_ANDROID_KEY_ALIAS").orNull,
+    "keyPassword" to providers.environmentVariable("UPKEEP_ANDROID_KEY_PASSWORD").orNull,
+)
+val hasReleaseSigning = releaseSigningValues.values.all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.rwrife.upkeeplog"
     compileSdk = flutter.compileSdkVersion
@@ -26,11 +34,22 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseSigningValues.getValue("storeFile")!!)
+                storePassword = releaseSigningValues.getValue("storePassword")
+                keyAlias = releaseSigningValues.getValue("keyAlias")
+                keyPassword = releaseSigningValues.getValue("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Release signing is owner-managed. With no UPKEEP_ANDROID_* secrets,
+            // Gradle may build an unsigned artifact but never substitutes debug keys.
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 }

@@ -126,7 +126,18 @@ signed package or store release is claimed.
 4. Asset history, search, and attachments — complete
 5. Opt-in local reminders with graceful denial — complete
 6. Backup/restore, CSV export, and privacy controls — complete
-7. Platform builds and release-readiness checks
+7. Platform builds and release-readiness checks — automated artifact/hash gates
+   implemented; owner device accessibility, signing, screenshots, and store
+   submission remain explicit manual gates
+
+Release hardening publishes readable test/audit reports plus debug-signed (not
+Play-signed) Android and no-codesign iOS development artifacts from CI. See the
+[development release checklist](docs/release-checklist.md),
+[store listing and privacy disclosure](docs/store-listing.md), and
+[release notes template](docs/release-notes-template.md). Placeholder store
+visuals are unmistakably marked and must be replaced with real, privacy-reviewed
+captures. No signed package, device accessibility pass, tag, or store publication
+is claimed by the repository itself.
 
 ## Development quickstart
 
@@ -142,6 +153,7 @@ dart format --output=none --set-exit-if-changed .
 flutter analyze
 flutter test --coverage
 dart run tool/check_dependency_licenses.dart --output build/reports/dependency-licenses.txt
+dart run tool/check_release_readiness.dart --output build/reports/release-readiness.md
 flutter run
 ```
 
