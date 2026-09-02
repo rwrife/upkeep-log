@@ -89,13 +89,15 @@ Evidence: **PENDING — do not mark complete without a real run.**
 | Android | `CAMERA` | Capture an attachment | Explicit **Attach → Take photo** only |
 | Android | `POST_NOTIFICATIONS` | Optional local reminders on Android 13+ | Explicit reminder enable only |
 | Android | `RECEIVE_BOOT_COMPLETED` | Rebuild persisted local reminder intent | OS reboot/package/time events |
+| Android | app-scoped `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | AndroidX signature guard for non-exported dynamic receivers; grants no user-data capability | Generated into the merged manifest |
 | iOS | Camera usage description | Capture an attachment | Explicit **Attach → Take photo** only |
 | iOS | Photo-library usage description | Select one image with PHPicker | Explicit **Attach → Choose photo** only |
 | iOS | Local notification authorization | Optional local reminders | Explicit reminder enable only |
 
 No Internet, tracking, analytics, advertising, account, push, contacts, location,
-microphone, Bluetooth, or broad-storage capability is declared. Document and
-review any future change before adding it.
+microphone, Bluetooth, or broad-storage capability is declared. The AndroidX
+app-scoped signature guard is not a user permission or data capability. Document
+and review any future change before adding a permission.
 
 ## Owner-managed Android signing and Play delivery
 
