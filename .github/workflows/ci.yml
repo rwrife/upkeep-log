@@ -116,6 +116,7 @@ jobs:
             android.permission.CAMERA \
             android.permission.POST_NOTIFICATIONS \
             android.permission.RECEIVE_BOOT_COMPLETED \
+            com.rwrife.upkeeplog.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION \
             > build/reports/android-permissions-expected.txt
           diff -u build/reports/android-permissions-expected.txt build/reports/android-permissions.txt
       - name: Package Android development artifact
