@@ -17,10 +17,42 @@ env:
   FLUTTER_VERSION: 3.47.1
 
 jobs:
-  quality:
-    name: Format, analyze, and test
+  draft-release-linkage:
+    name: Guard draft release-hardening issue linkage
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
+    steps:
+      - name: Block auto-closing issue #7 from draft PRs
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+
+          body = os.environ.get('PR_BODY') or ''
+          closing_pattern = re.compile(
+              r'(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+'
+              r'(?:rwrife/upkeep-log)?#7\b'
+          )
+          if closing_pattern.search(body):
+              print(
+                  'Draft PRs for release-hardening issue #7 must not use '
+                  'auto-closing keywords. Use "Progresses #7" until manual '
+                  'TalkBack/VoiceOver evidence is complete and the PR is ready '
+                  'to merge.',
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          print('Draft linkage guard: PASS (no auto-closing keyword for #7).')
+          PY
+
+  quality:
+    name: Format, analyze, test, and release audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
@@ -29,32 +61,55 @@ jobs:
           channel: stable
           cache: true
       - name: Report toolchain
-        run: flutter --version
+        run: |
+          mkdir -p build/reports
+          {
+            flutter --version
+            dart --version
+            uname -a
+          } 2>&1 | tee build/reports/quality-toolchain.txt
       - name: Resolve locked dependencies
         run: |
           flutter pub get --enforce-lockfile
           git diff --exit-code
+      - name: Verify generated sources
+        run: |
+          dart run build_runner build 2>&1 | tee build/reports/code-generation.txt
+          git diff --exit-code
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed .
       - name: Analyze
-        run: flutter analyze
-      - name: Test with coverage
-        run: flutter test --coverage
+        run: flutter analyze 2>&1 | tee build/reports/flutter-analyze.txt
+      - name: Test all unit, widget, adapter, and integration suites
+        run: flutter test --coverage --reporter expanded 2>&1 | tee build/reports/flutter-tests.txt
+      - name: Re-run release-critical integration scenarios as a named gate
+        run: |
+          flutter test \
+            test/integration \
+            test/adapters/database_migration_test.dart \
+            test/adapters/data_portability_service_test.dart \
+            test/adapters/attachment_service_test.dart \
+            test/application/reminder_coordinator_test.dart \
+            --reporter expanded 2>&1 | tee build/reports/release-critical-tests.txt
+      - name: Audit release declarations and metadata
+        run: dart run tool/check_release_readiness.dart --output build/reports/release-readiness.md
       - name: Review dependency licenses
         run: dart run tool/check_dependency_licenses.dart --output build/reports/dependency-licenses.txt
       - name: Upload quality reports
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: quality-reports
           path: |
             coverage/lcov.info
-            build/reports/dependency-licenses.txt
-          if-no-files-found: error
+            build/reports/*
+          if-no-files-found: warn
+          retention-days: 30
 
   android:
-    name: Android debug build
+    name: Android debug build and checksum
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
@@ -62,23 +117,68 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
+      - name: Resolve locked dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Record Android toolchain
+        run: |
+          mkdir -p build/reports
+          {
+            flutter --version
+            java -version
+            uname -a
+          } 2>&1 | tee build/reports/android-toolchain.txt
       - name: Validate Gradle wrapper inputs
         run: |
           test -x android/gradlew
           echo "b3a875ddc1f044746e1b1a55f645584505f4a10438c1afea9f15e92a7c42ec13  android/gradle/wrapper/gradle-wrapper.jar" | sha256sum --check --strict
-      - run: flutter pub get --enforce-lockfile
       - name: Validate committed Gradle dependency verification metadata
         run: |
           test "$(git ls-files -s -- android/gradle/verification-metadata.xml | cut -d' ' -f1)" = "100644"
           test ! -L android/gradle/verification-metadata.xml
           cd android
           ./gradlew --dependency-verification strict help
-      - run: flutter build apk --debug
+      - name: Build Android debug APK
+        run: flutter build apk --debug 2>&1 | tee build/reports/android-build.txt
+      - name: Audit built APK permissions
+        run: |
+          APKANALYZER="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          test -x "$APKANALYZER"
+          "$APKANALYZER" manifest permissions build/app/outputs/flutter-apk/app-debug.apk | sort | tee build/reports/android-permissions.txt
+          printf '%s\n' \
+            android.permission.CAMERA \
+            android.permission.POST_NOTIFICATIONS \
+            android.permission.RECEIVE_BOOT_COMPLETED \
+            com.rwrife.upkeeplog.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION \
+            > build/reports/android-permissions-expected.txt
+          diff -u build/reports/android-permissions-expected.txt build/reports/android-permissions.txt
+      - name: Package Android development artifact
+        run: |
+          dart run tool/check_dependency_licenses.dart --output build/reports/dependency-licenses.txt
+          mkdir -p build/release/android
+          cp build/app/outputs/flutter-apk/app-debug.apk build/release/android/Upkeep-Log-Android-debug.apk
+          cp build/reports/android-toolchain.txt build/reports/android-build.txt build/reports/android-permissions.txt build/reports/dependency-licenses.txt build/release/android/
+          cd build/release/android
+          sha256sum Upkeep-Log-Android-debug.apk dependency-licenses.txt > SHA256SUMS-android.txt
+      - name: Upload Android build reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-build-reports
+          path: build/reports/*
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Upload Android debug artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-debug-artifact
+          path: build/release/android/*
+          if-no-files-found: error
+          retention-days: 30
 
   ios:
-    name: iOS no-codesign debug build
+    name: iOS no-codesign debug build and checksum
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
@@ -86,8 +186,47 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-      - run: flutter pub get --enforce-lockfile
-      - run: flutter build ios --debug --no-codesign
+      - name: Resolve locked dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Record iOS toolchain
+        run: |
+          mkdir -p build/reports
+          {
+            flutter --version
+            xcodebuild -version
+            sw_vers
+            uname -a
+          } 2>&1 | tee build/reports/ios-toolchain.txt
+      - name: Build iOS without code signing
+        run: flutter build ios --debug --no-codesign 2>&1 | tee build/reports/ios-build.txt
+      - name: Audit bundled iOS privacy manifest
+        run: |
+          test -f build/ios/iphoneos/Runner.app/PrivacyInfo.xcprivacy
+          plutil -lint build/ios/iphoneos/Runner.app/PrivacyInfo.xcprivacy
+          plutil -p build/ios/iphoneos/Runner.app/PrivacyInfo.xcprivacy | tee build/reports/ios-privacy-manifest.txt
+      - name: Package iOS development artifact
+        run: |
+          dart run tool/check_dependency_licenses.dart --output build/reports/dependency-licenses.txt
+          mkdir -p build/release/ios
+          ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app build/release/ios/Upkeep-Log-iOS-debug-nosign.zip
+          cp build/reports/ios-toolchain.txt build/reports/ios-build.txt build/reports/ios-privacy-manifest.txt build/reports/dependency-licenses.txt build/release/ios/
+          cd build/release/ios
+          shasum -a 256 Upkeep-Log-iOS-debug-nosign.zip dependency-licenses.txt > SHA256SUMS-ios.txt
+      - name: Upload iOS build reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-build-reports
+          path: build/reports/*
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Upload iOS no-codesign artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-debug-nosign-artifact
+          path: build/release/ios/*
+          if-no-files-found: error
+          retention-days: 30
 
   dependency-audit:
     name: Dependency vulnerability and license review
@@ -103,6 +242,7 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - name: Scan the regular pinned lockfile for known vulnerabilities
         run: |
+          mkdir -p build/reports
           test "$(git ls-files -s -- pubspec.lock | cut -d' ' -f1)" = "100644"
           test ! -L pubspec.lock
           curl --fail --location --retry 3 \
@@ -110,8 +250,8 @@ jobs:
             --output /tmp/osv-scanner
           echo "edcfc41d257db36148f065055655fe3fcfc434b0b423ea67468a84c207524e0c  /tmp/osv-scanner" | sha256sum --check --strict
           chmod 700 /tmp/osv-scanner
-          /tmp/osv-scanner --version
-          /tmp/osv-scanner scan source --lockfile=pubspec.lock
+          /tmp/osv-scanner --version 2>&1 | tee build/reports/dependency-vulnerability.txt
+          /tmp/osv-scanner scan source --lockfile=pubspec.lock 2>&1 | tee -a build/reports/dependency-vulnerability.txt
       - name: Review dependency freshness
         run: |
           mkdir -p build/reports
@@ -119,8 +259,46 @@ jobs:
       - name: Review dependency licenses
         run: dart run tool/check_dependency_licenses.dart --output build/reports/dependency-licenses.txt
       - name: Upload dependency reports
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dependency-reports
           path: build/reports/dependency-*.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  release-manifest:
+    name: Combine development artifact manifests
+    runs-on: ubuntu-latest
+    needs: [quality, android, ios, dependency-audit]
+    steps:
+      - name: Download Android artifact metadata
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: android-debug-artifact
+          path: artifacts/android
+      - name: Download iOS artifact metadata
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ios-debug-nosign-artifact
+          path: artifacts/ios
+      - name: Create combined manifest
+        run: |
+          {
+            echo "Upkeep Log development artifact manifest"
+            echo "Commit: $GITHUB_SHA"
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo
+            echo "Android (debug; not Play-signed):"
+            cat artifacts/android/SHA256SUMS-android.txt
+            echo
+            echo "iOS (debug; no code signing):"
+            cat artifacts/ios/SHA256SUMS-ios.txt
+          } | tee development-release-manifest.txt
+      - name: Upload combined manifest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: development-release-manifest
+          path: development-release-manifest.txt
           if-no-files-found: error
+          retention-days: 30
