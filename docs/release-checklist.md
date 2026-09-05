@@ -41,10 +41,12 @@ flutter build ios --debug --no-codesign
 
 ## Manual accessibility gate — pending owner/device evidence
 
-Any PR that closes release-hardening issue #7 must remain a draft while either
-platform's evidence below is pending. Do not merge it, close the issue, or create
-a development tag until an owner records both real runs and confirms the checked
-items. Automated semantics/widget tests are supporting evidence only.
+Any PR for release-hardening issue #7 must remain a draft while either
+platform's evidence below is pending. While draft, use `Progresses #7` in PR
+text (the CI draft-linkage guard fails if a draft body uses closing keywords).
+Do not merge it, close the issue, or create a development tag until an owner
+records both real runs and confirms the checked items. Automated
+semantics/widget tests are supporting evidence only.
 
 Record tester, date, device/simulator, OS version, text-size setting, and an
 evidence link for each platform. A simulator is acceptable where the assistive

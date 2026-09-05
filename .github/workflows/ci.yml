@@ -17,6 +17,38 @@ env:
   FLUTTER_VERSION: 3.47.1
 
 jobs:
+  draft-release-linkage:
+    name: Guard draft release-hardening issue linkage
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
+    steps:
+      - name: Block auto-closing issue #7 from draft PRs
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+
+          body = os.environ.get('PR_BODY') or ''
+          closing_pattern = re.compile(
+              r'(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+'
+              r'(?:rwrife/upkeep-log)?#7\b'
+          )
+          if closing_pattern.search(body):
+              print(
+                  'Draft PRs for release-hardening issue #7 must not use '
+                  'auto-closing keywords. Use "Progresses #7" until manual '
+                  'TalkBack/VoiceOver evidence is complete and the PR is ready '
+                  'to merge.',
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          print('Draft linkage guard: PASS (no auto-closing keyword for #7).')
+          PY
+
   quality:
     name: Format, analyze, test, and release audit
     runs-on: ubuntu-latest
