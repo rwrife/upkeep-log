@@ -62,6 +62,7 @@ jobs:
           cache: true
       - name: Report toolchain
         run: |
+          set -euo pipefail
           mkdir -p build/reports
           {
             flutter --version
@@ -74,16 +75,22 @@ jobs:
           git diff --exit-code
       - name: Verify generated sources
         run: |
+          set -euo pipefail
           dart run build_runner build 2>&1 | tee build/reports/code-generation.txt
           git diff --exit-code
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed .
       - name: Analyze
-        run: flutter analyze 2>&1 | tee build/reports/flutter-analyze.txt
+        run: |
+          set -euo pipefail
+          flutter analyze 2>&1 | tee build/reports/flutter-analyze.txt
       - name: Test all unit, widget, adapter, and integration suites
-        run: flutter test --coverage --reporter expanded 2>&1 | tee build/reports/flutter-tests.txt
+        run: |
+          set -euo pipefail
+          flutter test --coverage --reporter expanded 2>&1 | tee build/reports/flutter-tests.txt
       - name: Re-run release-critical integration scenarios as a named gate
         run: |
+          set -euo pipefail
           flutter test \
             test/integration \
             test/adapters/database_migration_test.dart \
@@ -121,6 +128,7 @@ jobs:
         run: flutter pub get --enforce-lockfile
       - name: Record Android toolchain
         run: |
+          set -euo pipefail
           mkdir -p build/reports
           {
             flutter --version
@@ -138,7 +146,32 @@ jobs:
           cd android
           ./gradlew --dependency-verification strict help
       - name: Build Android debug APK
-        run: flutter build apk --debug 2>&1 | tee build/reports/android-build.txt
+        run: |
+          set -euo pipefail
+          mkdir -p build/reports
+          : > build/reports/android-build.txt
+          for attempt in 1 2 3; do
+            if flutter build apk --debug 2>&1 | tee -a build/reports/android-build.txt; then
+              break
+            fi
+
+            if ! grep -q 'sqlite3\.dart/releases/download' build/reports/android-build.txt; then
+              echo "Android debug build failed for a non-transient reason; not retrying." \
+                | tee -a build/reports/android-build.txt
+              exit 1
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "Android debug build failed after 3 attempts due to sqlite native-asset download errors." \
+                | tee -a build/reports/android-build.txt
+              exit 1
+            fi
+
+            next_attempt=$((attempt + 1))
+            echo "Transient sqlite native-asset download failure; retrying (attempt ${next_attempt}/3)." \
+              | tee -a build/reports/android-build.txt
+          done
+          test -f build/app/outputs/flutter-apk/app-debug.apk
       - name: Audit built APK permissions
         run: |
           APKANALYZER="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
@@ -190,6 +223,7 @@ jobs:
         run: flutter pub get --enforce-lockfile
       - name: Record iOS toolchain
         run: |
+          set -euo pipefail
           mkdir -p build/reports
           {
             flutter --version
@@ -198,7 +232,9 @@ jobs:
             uname -a
           } 2>&1 | tee build/reports/ios-toolchain.txt
       - name: Build iOS without code signing
-        run: flutter build ios --debug --no-codesign 2>&1 | tee build/reports/ios-build.txt
+        run: |
+          set -euo pipefail
+          flutter build ios --debug --no-codesign 2>&1 | tee build/reports/ios-build.txt
       - name: Audit bundled iOS privacy manifest
         run: |
           test -f build/ios/iphoneos/Runner.app/PrivacyInfo.xcprivacy
@@ -242,6 +278,7 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - name: Scan the regular pinned lockfile for known vulnerabilities
         run: |
+          set -euo pipefail
           mkdir -p build/reports
           test "$(git ls-files -s -- pubspec.lock | cut -d' ' -f1)" = "100644"
           test ! -L pubspec.lock
@@ -254,6 +291,7 @@ jobs:
           /tmp/osv-scanner scan source --lockfile=pubspec.lock 2>&1 | tee -a build/reports/dependency-vulnerability.txt
       - name: Review dependency freshness
         run: |
+          set -euo pipefail
           mkdir -p build/reports
           dart pub outdated --no-dependency-overrides --no-prereleases | tee build/reports/dependency-outdated.txt
       - name: Review dependency licenses
