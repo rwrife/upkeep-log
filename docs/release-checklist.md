@@ -48,6 +48,10 @@ Do not merge it, close the issue, or create a development tag until an owner
 records both real runs and confirms the checked items. Automated
 semantics/widget tests are supporting evidence only.
 
+Before undrafting, copy `docs/accessibility-verification-template.md` to
+`docs/release-evidence/<date>-accessibility.md` and fill every metadata/evidence
+field from real runs.
+
 Record tester, date, device/simulator, OS version, text-size setting, and an
 evidence link for each platform. A simulator is acceptable where the assistive
 technology is fully available; at least one representative physical-device pass

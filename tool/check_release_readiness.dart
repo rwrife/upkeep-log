@@ -61,7 +61,7 @@ Future<void> main(List<String> arguments) async {
   if (failures.isNotEmpty) exitCode = 1;
 }
 
-int releaseReadinessCheckCount() => 17;
+int releaseReadinessCheckCount() => 19;
 
 Future<List<String>> auditReleaseReadiness(Directory root) async {
   final List<String> failures = <String>[];
@@ -189,6 +189,8 @@ Future<List<String>> auditReleaseReadiness(Directory root) async {
   final List<String> requiredDocuments = <String>[
     'THIRD_PARTY_NOTICES.md',
     'docs/release-checklist.md',
+    'docs/accessibility-verification-template.md',
+    'docs/release-evidence/README.md',
     'docs/release-notes-template.md',
     'docs/store-listing.md',
     'docs/store-assets/README.md',

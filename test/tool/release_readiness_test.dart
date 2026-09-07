@@ -12,7 +12,7 @@ void main() {
         Directory.current,
       );
       expect(failures, isEmpty, reason: failures.join('\n'));
-      expect(releaseReadinessCheckCount(), greaterThanOrEqualTo(17));
+      expect(releaseReadinessCheckCount(), greaterThanOrEqualTo(19));
     },
   );
 
@@ -32,6 +32,11 @@ void main() {
         contains('android/app/src/main/AndroidManifest.xml is missing'),
       );
       expect(failures, contains('ios/Runner/PrivacyInfo.xcprivacy is missing'));
+      expect(
+        failures,
+        contains('docs/accessibility-verification-template.md is missing'),
+      );
+      expect(failures, contains('docs/release-evidence/README.md is missing'));
     },
   );
 }
