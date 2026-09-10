@@ -4001,8 +4001,10 @@ class $$HomesTableTableManager
               ),
           withReferenceMapper: (p0) => p0
               .map(
-                (e) =>
-                    (e.readTable(table), $$HomesTableReferences(db, table, e)),
+                (e) => (
+                  e.readTable<$HomesTable, Home>(table),
+                  $$HomesTableReferences(db, table, e),
+                ),
               )
               .toList(),
           prefetchHooksCallback:
@@ -4306,8 +4308,10 @@ class $$RoomsTableTableManager
               ),
           withReferenceMapper: (p0) => p0
               .map(
-                (e) =>
-                    (e.readTable(table), $$RoomsTableReferences(db, table, e)),
+                (e) => (
+                  e.readTable<$RoomsTable, Room>(table),
+                  $$RoomsTableReferences(db, table, e),
+                ),
               )
               .toList(),
           prefetchHooksCallback: ({homeId = false}) {
@@ -4599,8 +4603,10 @@ class $$AssetsTableTableManager
               ),
           withReferenceMapper: (p0) => p0
               .map(
-                (e) =>
-                    (e.readTable(table), $$AssetsTableReferences(db, table, e)),
+                (e) => (
+                  e.readTable<$AssetsTable, Asset>(table),
+                  $$AssetsTableReferences(db, table, e),
+                ),
               )
               .toList(),
           prefetchHooksCallback: ({homeId = false}) {
@@ -5198,7 +5204,7 @@ class $$TaskTemplatesTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$TaskTemplatesTable, TaskTemplate>(table),
                   $$TaskTemplatesTableReferences(db, table, e),
                 ),
               )
@@ -5622,7 +5628,7 @@ class $$TaskOccurrencesTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$TaskOccurrencesTable, TaskOccurrence>(table),
                   $$TaskOccurrencesTableReferences(db, table, e),
                 ),
               )
@@ -6083,7 +6089,7 @@ class $$CompletionsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$CompletionsTable, Completion>(table),
                   $$CompletionsTableReferences(db, table, e),
                 ),
               )
@@ -6538,7 +6544,9 @@ class $$CompletionRevisionsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$CompletionRevisionsTable, CompletionRevision>(
+                    table,
+                  ),
                   $$CompletionRevisionsTableReferences(db, table, e),
                 ),
               )
@@ -6895,7 +6903,10 @@ class $$AttachmentMetadataRowsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<
+                    $AttachmentMetadataRowsTable,
+                    AttachmentMetadataRow
+                  >(table),
                   $$AttachmentMetadataRowsTableReferences(db, table, e),
                 ),
               )
@@ -7073,7 +7084,18 @@ class $$RestoreMetadataTableTableManager
                 token: token,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$RestoreMetadataTable, RestoreMetadataData>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$UpkeepDatabase,
+                    $RestoreMetadataTable,
+                    RestoreMetadataData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),

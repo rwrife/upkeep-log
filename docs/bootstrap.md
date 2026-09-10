@@ -25,6 +25,7 @@ dart format --output=none --set-exit-if-changed .
 flutter analyze
 flutter test --coverage
 dart run tool/check_dependency_licenses.dart --output build/reports/dependency-licenses.txt
+dart run tool/check_release_readiness.dart --output build/reports/release-readiness.md
 ```
 
 Run the app on a configured target with:
@@ -34,7 +35,7 @@ flutter run
 ```
 
 Android development additionally requires a Java 17 toolchain and Android SDK.
-Build the unsigned debug APK with:
+Build the debug-signed (not release/Play-signed) APK with:
 
 ```bash
 flutter build apk --debug
@@ -77,4 +78,17 @@ tested. Android camera and system-document intents and iOS camera, PHPicker,
 and document picker are narrow platform-channel adapters; they are invoked only
 from an explicit Attach action. Opt-in local reminders use native platform
 channels and are rebuilt from persisted task intent; see `docs/reminders.md`.
-Exports belong to later issues.
+Exports, staged backup restore, and privacy controls are implemented and tested.
+CI captures readable test and release-audit reports, exact platform toolchain and
+build logs, debug-signed Android/no-codesign iOS development artifacts, and
+SHA-256 manifests.
+See `docs/release-checklist.md` for the owner-only TalkBack, VoiceOver, signing,
+screenshot, device-install, tag, and store-submission gates. Linux cannot perform
+Xcode builds, and this repository never treats widget tests as manual VoiceOver
+or TalkBack evidence.
+
+The committed debug/profile manifests deliberately omit `INTERNET`, so a
+network-attached Flutter VM service and hot reload may be unavailable. This keeps
+even distributed development artifacts inside the offline product boundary. A
+maintainer who temporarily enables VM-service networking must do so only in an
+untracked local manifest and must not use that build as release evidence.
