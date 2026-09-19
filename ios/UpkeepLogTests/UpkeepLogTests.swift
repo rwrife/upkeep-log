@@ -9,6 +9,14 @@ final class UpkeepLogTests: XCTestCase {
         XCTAssertLessThan(LocalDay("2024-02-28"), leapDay)
     }
 
+    func testMonthAdditionClampsWithoutPermanentDrift() {
+        let start = LocalDay("2024-01-31")
+
+        XCTAssertEqual(start.addingMonths(1), LocalDay("2024-02-29"))
+        XCTAssertEqual(start.addingMonths(2), LocalDay("2024-03-31"))
+        XCTAssertEqual(LocalDay("2024-02-29").addingMonths(12), LocalDay("2025-02-28"))
+    }
+
     @MainActor
     func testOneTimeTaskCreatesOneOccurrence() throws {
         let root = FileManager.default.temporaryDirectory
@@ -16,8 +24,7 @@ final class UpkeepLogTests: XCTestCase {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
-        let manager = TestFileManager(root: root)
-        let store = UpkeepStore(fileManager: manager)
+        let store = UpkeepStore(supportURL: root)
         store.addHome(name: "Home", address: "")
         let home = try XCTUnwrap(store.homes.first)
         store.addTask(TaskRecord(
@@ -35,23 +42,5 @@ final class UpkeepLogTests: XCTestCase {
             ).map(\.scheduledDay),
             [LocalDay("2026-01-15")]
         )
-    }
-}
-
-private final class TestFileManager: FileManager {
-    private let root: URL
-
-    init(root: URL) {
-        self.root = root
-        super.init()
-    }
-
-    override func url(
-        for directory: SearchPathDirectory,
-        in domain: SearchPathDomainMask,
-        appropriateFor url: URL?,
-        create shouldCreate: Bool
-    ) throws -> URL {
-        root
     }
 }

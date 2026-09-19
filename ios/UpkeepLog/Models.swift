@@ -31,11 +31,30 @@ struct LocalDay: Codable, Hashable, Comparable, Identifiable, CustomStringConver
     }
 
     func adding(_ component: Calendar.Component, value: Int) -> LocalDay {
-        LocalDay(date: Calendar(identifier: .gregorian).date(
+        LocalDay(date: Self.utcCalendar.date(
             byAdding: component,
             value: value,
             to: date
-        ) ?? date)
+        ) ?? date, calendar: Self.utcCalendar)
+    }
+
+    func addingMonths(_ value: Int) -> LocalDay {
+        let source = Self.utcCalendar.dateComponents([.year, .month, .day], from: date)
+        guard
+            let firstOfMonth = Self.utcCalendar.date(from: DateComponents(
+                year: source.year,
+                month: source.month,
+                day: 1
+            )),
+            let targetMonth = Self.utcCalendar.date(byAdding: .month, value: value, to: firstOfMonth),
+            let dayRange = Self.utcCalendar.range(of: .day, in: .month, for: targetMonth)
+        else { return self }
+        var target = Self.utcCalendar.dateComponents([.year, .month], from: targetMonth)
+        target.day = min(source.day ?? 1, dayRange.count)
+        return LocalDay(
+            date: Self.utcCalendar.date(from: target) ?? targetMonth,
+            calendar: Self.utcCalendar
+        )
     }
 
     private static let formatter: DateFormatter = {
@@ -45,6 +64,13 @@ struct LocalDay: Codable, Hashable, Comparable, Identifiable, CustomStringConver
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
+    }()
+
+    private static var utcCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: "en_US_POSIX")
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
     }()
 }
 

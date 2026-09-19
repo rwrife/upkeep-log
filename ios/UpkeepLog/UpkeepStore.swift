@@ -11,9 +11,9 @@ final class UpkeepStore: ObservableObject {
     private let encoder: JSONEncoder
     private let decoder = JSONDecoder()
 
-    init(fileManager: FileManager = .default) {
+    init(fileManager: FileManager = .default, supportURL: URL? = nil) {
         self.fileManager = fileManager
-        let support = (try? fileManager.url(
+        let support = supportURL ?? (try? fileManager.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
@@ -185,19 +185,23 @@ final class UpkeepStore: ObservableObject {
 
     private func scheduledDays(for task: TaskRecord, through end: LocalDay) -> [LocalDay] {
         var result: [LocalDay] = []
-        var day = task.startDay
         var safety = 0
+        var day = task.startDay
         while day <= end, safety < 4_000 {
             result.append(day)
             guard task.recurrence != .oneTime else { break }
+            safety += 1
             switch task.recurrence {
             case .oneTime: break
-            case .days: day = day.adding(.day, value: task.interval)
-            case .weeks: day = day.adding(.day, value: task.interval * 7)
-            case .months: day = day.adding(.month, value: task.interval)
-            case .years: day = day.adding(.year, value: task.interval)
+            case .days:
+                day = task.startDay.adding(.day, value: task.interval * safety)
+            case .weeks:
+                day = task.startDay.adding(.day, value: task.interval * 7 * safety)
+            case .months:
+                day = task.startDay.addingMonths(task.interval * safety)
+            case .years:
+                day = task.startDay.addingMonths(task.interval * 12 * safety)
             }
-            safety += 1
         }
         return result
     }
