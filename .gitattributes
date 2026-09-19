@@ -1,4 +1,0 @@
-*.bat text eol=crlf
-*.jar binary
-*.png binary
-android/gradlew text eol=lf
