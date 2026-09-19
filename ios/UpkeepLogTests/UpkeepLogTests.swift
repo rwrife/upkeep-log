@@ -17,6 +17,12 @@ final class UpkeepLogTests: XCTestCase {
         XCTAssertEqual(LocalDay("2024-02-29").addingMonths(12), LocalDay("2025-02-28"))
     }
 
+    func testMalformedLocalDayIsRejectedDuringRestore() {
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(LocalDay.self, from: Data(#""2024-02-31""#.utf8))
+        )
+    }
+
     @MainActor
     func testOneTimeTaskCreatesOneOccurrence() throws {
         let root = FileManager.default.temporaryDirectory

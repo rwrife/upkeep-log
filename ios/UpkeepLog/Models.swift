@@ -7,6 +7,7 @@ struct LocalDay: Codable, Hashable, Comparable, Identifiable, CustomStringConver
     var description: String { rawValue }
 
     init(_ rawValue: String) {
+        precondition(Self.isValid(rawValue), "LocalDay requires a valid yyyy-MM-dd value")
         self.rawValue = rawValue
     }
 
@@ -24,6 +25,22 @@ struct LocalDay: Codable, Hashable, Comparable, Identifiable, CustomStringConver
 
     static func < (lhs: LocalDay, rhs: LocalDay) -> Bool {
         lhs.rawValue < rhs.rawValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        guard Self.isValid(value) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "Expected a valid yyyy-MM-dd date"
+            ))
+        }
+        rawValue = value
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 
     var date: Date {
@@ -69,8 +86,14 @@ struct LocalDay: Codable, Hashable, Comparable, Identifiable, CustomStringConver
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM-dd"
+        formatter.isLenient = false
         return formatter
     }()
+
+    private static func isValid(_ value: String) -> Bool {
+        guard value.count == 10, let date = formatter.date(from: value) else { return false }
+        return formatter.string(from: date) == value
+    }
 
     private static var utcCalendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)

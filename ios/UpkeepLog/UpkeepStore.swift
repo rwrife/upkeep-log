@@ -76,15 +76,11 @@ final class UpkeepStore: ObservableObject {
         costText: String,
         currency: String
     ) {
-        let amount = Decimal(string: costText, locale: .current)
-        let minorUnits = amount.map {
-            NSDecimalNumber(decimal: $0 * 100).intValue
-        }
         let revision = CompletionRevision(
             actualDay: actualDay,
             notes: notes.trimmed,
             parts: parts.trimmed,
-            costMinorUnits: minorUnits,
+            costMinorUnits: Self.minorUnits(from: costText),
             currency: currency.uppercased()
         )
         state.completions.append(CompletionRecord(
@@ -106,12 +102,11 @@ final class UpkeepStore: ObservableObject {
         currency: String
     ) {
         guard let index = state.completions.firstIndex(where: { $0.id == completionID }) else { return }
-        let amount = Decimal(string: costText, locale: .current)
         state.completions[index].revisions.append(CompletionRevision(
             actualDay: actualDay,
             notes: notes.trimmed,
             parts: parts.trimmed,
-            costMinorUnits: amount.map { NSDecimalNumber(decimal: $0 * 100).intValue },
+            costMinorUnits: Self.minorUnits(from: costText),
             currency: currency.uppercased()
         ))
         save()
@@ -137,13 +132,14 @@ final class UpkeepStore: ObservableObject {
     }
 
     func occurrences(from: LocalDay, through: LocalDay) -> [ScheduledOccurrence] {
+        let completedKeys = Set(state.completions.map {
+            "\($0.taskID.uuidString)-\($0.scheduledDay.rawValue)"
+        })
         state.tasks
             .filter { !$0.isPaused }
             .flatMap { task in scheduledDays(for: task, through: through).compactMap { day in
                 let key = "\(task.id.uuidString)-\(day.rawValue)"
-                guard !state.completions.contains(where: {
-                    $0.taskID == task.id && $0.scheduledDay == day
-                }) else { return nil }
+                guard !completedKeys.contains(key) else { return nil }
                 let visible = state.snoozes[key] ?? day
                 guard visible >= from && visible <= through else { return nil }
                 return ScheduledOccurrence(task: task, scheduledDay: day, visibleDay: visible)
@@ -196,10 +192,10 @@ final class UpkeepStore: ObservableObject {
         var day = task.startDay
         while day <= end, occurrenceIndex < maxOccurrences {
             result.append(day)
-            guard task.recurrence != .oneTime else { break }
             occurrenceIndex += 1
             switch task.recurrence {
-            case .oneTime: break
+            case .oneTime:
+                return result
             case .days:
                 day = task.startDay.adding(.day, value: task.interval * occurrenceIndex)
             case .weeks:
@@ -211,6 +207,14 @@ final class UpkeepStore: ObservableObject {
             }
         }
         return result
+    }
+
+    private static func minorUnits(from text: String) -> Int? {
+        guard var value = Decimal(string: text, locale: .current) else { return nil }
+        var scaled = value * 100
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &scaled, 0, .plain)
+        return NSDecimalNumber(decimal: rounded).intValue
     }
 
     private func load() {
