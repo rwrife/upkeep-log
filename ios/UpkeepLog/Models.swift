@@ -30,6 +30,12 @@ struct LocalDay: Codable, Hashable, Comparable, Identifiable, CustomStringConver
         Self.formatter.date(from: rawValue) ?? Date(timeIntervalSince1970: 0)
     }
 
+    var dateComponents: DateComponents {
+        let values = rawValue.split(separator: "-").compactMap { Int($0) }
+        guard values.count == 3 else { return DateComponents() }
+        return DateComponents(year: values[0], month: values[1], day: values[2])
+    }
+
     func adding(_ component: Calendar.Component, value: Int) -> LocalDay {
         LocalDay(date: Self.utcCalendar.date(
             byAdding: component,

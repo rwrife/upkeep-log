@@ -76,7 +76,7 @@ final class UpkeepStore: ObservableObject {
         costText: String,
         currency: String
     ) {
-        let amount = Decimal(string: costText)
+        let amount = Decimal(string: costText, locale: .current)
         let minorUnits = amount.map {
             NSDecimalNumber(decimal: $0 * 100).intValue
         }
@@ -106,7 +106,7 @@ final class UpkeepStore: ObservableObject {
         currency: String
     ) {
         guard let index = state.completions.firstIndex(where: { $0.id == completionID }) else { return }
-        let amount = Decimal(string: costText)
+        let amount = Decimal(string: costText, locale: .current)
         state.completions[index].revisions.append(CompletionRevision(
             actualDay: actualDay,
             notes: notes.trimmed,
@@ -127,7 +127,13 @@ final class UpkeepStore: ObservableObject {
     func deleteAllData() {
         state = UpkeepState()
         save()
-        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        Task {
+            let center = UNUserNotificationCenter.current()
+            let upkeepIDs = await center.pendingNotificationRequests()
+                .map(\.identifier)
+                .filter { $0.hasPrefix("upkeep.") }
+            center.removePendingNotificationRequests(withIdentifiers: upkeepIDs)
+        }
     }
 
     func occurrences(from: LocalDay, through: LocalDay) -> [ScheduledOccurrence] {
@@ -185,22 +191,23 @@ final class UpkeepStore: ObservableObject {
 
     private func scheduledDays(for task: TaskRecord, through end: LocalDay) -> [LocalDay] {
         var result: [LocalDay] = []
-        var safety = 0
+        let maxOccurrences = 4_000
+        var occurrenceIndex = 0
         var day = task.startDay
-        while day <= end, safety < 4_000 {
+        while day <= end, occurrenceIndex < maxOccurrences {
             result.append(day)
             guard task.recurrence != .oneTime else { break }
-            safety += 1
+            occurrenceIndex += 1
             switch task.recurrence {
             case .oneTime: break
             case .days:
-                day = task.startDay.adding(.day, value: task.interval * safety)
+                day = task.startDay.adding(.day, value: task.interval * occurrenceIndex)
             case .weeks:
-                day = task.startDay.adding(.day, value: task.interval * 7 * safety)
+                day = task.startDay.adding(.day, value: task.interval * 7 * occurrenceIndex)
             case .months:
-                day = task.startDay.addingMonths(task.interval * safety)
+                day = task.startDay.addingMonths(task.interval * occurrenceIndex)
             case .years:
-                day = task.startDay.addingMonths(task.interval * 12 * safety)
+                day = task.startDay.addingMonths(task.interval * 12 * occurrenceIndex)
             }
         }
         return result
@@ -238,10 +245,9 @@ final class UpkeepStore: ObservableObject {
                 let hour = occurrence.task.reminderHour,
                 let minute = occurrence.task.reminderMinute
             else { continue }
-            var components = Calendar.current.dateComponents(
-                [.year, .month, .day],
-                from: occurrence.visibleDay.date
-            )
+            var components = occurrence.visibleDay.dateComponents
+            components.calendar = Calendar.current
+            components.timeZone = .current
             components.hour = hour
             components.minute = minute
             let content = UNMutableNotificationContent()
