@@ -31,18 +31,46 @@ no third-party runtime dependencies.
 
 ## Development
 
-Open `ios/Runner.xcodeproj` in Xcode 16 or newer, select the `Runner` scheme and
+Open `ios/UpkeepLog.xcodeproj` in Xcode 16 or newer, select the `UpkeepLog` scheme and
 an iPhone simulator, then build or test.
 
 From a macOS command line:
 
 ```sh
 xcodebuild \
-  -project ios/Runner.xcodeproj \
-  -scheme Runner \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -project ios/UpkeepLog.xcodeproj \
+  -scheme UpkeepLog \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   clean test
 ```
+
+If `xcodebuild` reports that only Command Line Tools are selected, prefix the
+command with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
+Choose an installed simulator name from `xcrun simctl list devices available`.
+
+The shared `UpkeepLog` scheme includes the app and its XCTest target. App sources
+and resources live in `ios/UpkeepLog`; there is no Flutter, CocoaPods, or package
+installation step.
+
+## 6.5-inch screenshots
+
+Six native simulator captures are committed in
+[`screenshots/iphone-6.5`](screenshots/iphone-6.5): welcome, due, upcoming,
+completed, setup, and privacy/data. Each PNG is **1242 × 2688** pixels, captured
+at native resolution on iPhone 11 Pro Max in portrait orientation.
+
+Regenerate them on a Mac with Xcode and an installed iOS simulator runtime:
+
+```sh
+./scripts/capture-screenshots.sh
+```
+
+The script builds Debug, creates a disposable simulator, seeds fictional home
+maintenance data, captures the screens, checks pixel dimensions, and removes
+that simulator. It requires Python 3. Set `UPKEEP_SIM_RUNTIME` to select a
+specific installed runtime identifier. The tab-selection environment hook is
+compiled only into Debug builds; sample data is supplied by the capture script,
+not bundled in the production app.
 
 Release signing and App Store publication require owner-managed Apple
 credentials.

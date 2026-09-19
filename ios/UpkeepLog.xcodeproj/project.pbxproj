@@ -48,7 +48,7 @@
 			isa = PBXGroup;
 			children = (
 				A50000000000000000000002 /* UpkeepLog */,
-				A50000000000000000000003 /* Runner */,
+				A50000000000000000000003 /* Resources */,
 				A50000000000000000000004 /* UpkeepLogTests */,
 				A50000000000000000000005 /* Products */,
 			);
@@ -65,14 +65,14 @@
 			path = UpkeepLog;
 			sourceTree = "<group>";
 		};
-		A50000000000000000000003 /* Runner */ = {
+		A50000000000000000000003 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000005 /* Assets.xcassets */,
 				A20000000000000000000006 /* LaunchScreen.storyboard */,
 				A20000000000000000000007 /* Info.plist */,
 			);
-			path = Runner;
+			path = UpkeepLog/Resources;
 			sourceTree = "<group>";
 		};
 		A50000000000000000000004 /* UpkeepLogTests */ = {
@@ -199,7 +199,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Runner/Info.plist;
+				INFOPLIST_FILE = UpkeepLog/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rwrife.upkeeplog;
@@ -222,7 +222,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Runner/Info.plist;
+				INFOPLIST_FILE = UpkeepLog/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rwrife.upkeeplog;
@@ -246,6 +246,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rwrife.upkeeplog.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
@@ -262,6 +263,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rwrife.upkeeplog.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
@@ -274,6 +276,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ENABLE_TESTABILITY = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				GCC_OPTIMIZATION_LEVEL = 0;
+				ONLY_ACTIVE_ARCH = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

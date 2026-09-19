@@ -4,22 +4,35 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @EnvironmentObject private var store: UpkeepStore
 
+    @State private var selectedTab: Int = {
+        #if DEBUG
+        return Int(ProcessInfo.processInfo.environment["UPKEEP_SCREENSHOT_TAB"] ?? "0") ?? 0
+        #else
+        return 0
+        #endif
+    }()
+
     var body: some View {
         Group {
             if store.homes.isEmpty {
                 WelcomeView()
             } else {
-                TabView {
+                TabView(selection: $selectedTab) {
                     OccurrenceList(kind: .due)
                         .tabItem { Label("Due", systemImage: "calendar.badge.exclamationmark") }
+                        .tag(0)
                     OccurrenceList(kind: .upcoming)
                         .tabItem { Label("Upcoming", systemImage: "calendar") }
+                        .tag(1)
                     HistoryView()
                         .tabItem { Label("Completed", systemImage: "clock.arrow.circlepath") }
+                        .tag(2)
                     SetupView()
                         .tabItem { Label("Setup", systemImage: "slider.horizontal.3") }
+                        .tag(3)
                     DataView()
                         .tabItem { Label("Data", systemImage: "lock.shield") }
+                        .tag(4)
                 }
             }
         }

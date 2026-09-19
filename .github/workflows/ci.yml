@@ -30,8 +30,8 @@ jobs:
       - name: Build and test
         run: |
           xcodebuild \
-            -project ios/Runner.xcodeproj \
-            -scheme Runner \
+            -project ios/UpkeepLog.xcodeproj \
+            -scheme UpkeepLog \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}' \
             CODE_SIGNING_ALLOWED=NO \
             clean test

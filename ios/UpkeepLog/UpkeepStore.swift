@@ -135,7 +135,7 @@ final class UpkeepStore: ObservableObject {
         let completedKeys = Set(state.completions.map {
             "\($0.taskID.uuidString)-\($0.scheduledDay.rawValue)"
         })
-        state.tasks
+        return state.tasks
             .filter { !$0.isPaused }
             .flatMap { task in
                 let snoozedScheduledDays = state.snoozes.compactMap { key, visibleDay -> LocalDay? in
@@ -151,7 +151,7 @@ final class UpkeepStore: ObservableObject {
                     for: task,
                     startingAt: lowerBound,
                     through: through
-                ).compactMap { day in
+                ).compactMap { day -> ScheduledOccurrence? in
                 let key = "\(task.id.uuidString)-\(day.rawValue)"
                 guard !completedKeys.contains(key) else { return nil }
                 let visible = state.snoozes[key] ?? day
