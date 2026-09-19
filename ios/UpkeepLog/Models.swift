@@ -6,8 +6,8 @@ struct LocalDay: Codable, Hashable, Comparable, Identifiable, CustomStringConver
     var id: String { rawValue }
     var description: String { rawValue }
 
-    init(_ rawValue: String) {
-        precondition(Self.isValid(rawValue), "LocalDay requires a valid yyyy-MM-dd value")
+    init?(_ rawValue: String) {
+        guard Self.isValid(rawValue) else { return nil }
         self.rawValue = rawValue
     }
 
@@ -95,7 +95,7 @@ struct LocalDay: Codable, Hashable, Comparable, Identifiable, CustomStringConver
         return formatter.string(from: date) == value
     }
 
-    private static var utcCalendar: Calendar = {
+    private static let utcCalendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.locale = Locale(identifier: "en_US_POSIX")
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!

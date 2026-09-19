@@ -3,18 +3,18 @@ import XCTest
 
 final class UpkeepLogTests: XCTestCase {
     func testLocalDayComparisonAndDayAddition() {
-        let leapDay = LocalDay("2024-02-29")
+        let leapDay = LocalDay("2024-02-29")!
 
-        XCTAssertEqual(leapDay.adding(.day, value: 1), LocalDay("2024-03-01"))
-        XCTAssertLessThan(LocalDay("2024-02-28"), leapDay)
+        XCTAssertEqual(leapDay.adding(.day, value: 1), LocalDay("2024-03-01")!)
+        XCTAssertLessThan(LocalDay("2024-02-28")!, leapDay)
     }
 
     func testMonthAdditionClampsWithoutPermanentDrift() {
-        let start = LocalDay("2024-01-31")
+        let start = LocalDay("2024-01-31")!
 
-        XCTAssertEqual(start.addingMonths(1), LocalDay("2024-02-29"))
-        XCTAssertEqual(start.addingMonths(2), LocalDay("2024-03-31"))
-        XCTAssertEqual(LocalDay("2024-02-29").addingMonths(12), LocalDay("2025-02-28"))
+        XCTAssertEqual(start.addingMonths(1), LocalDay("2024-02-29")!)
+        XCTAssertEqual(start.addingMonths(2), LocalDay("2024-03-31")!)
+        XCTAssertEqual(LocalDay("2024-02-29")!.addingMonths(12), LocalDay("2025-02-28")!)
     }
 
     func testMalformedLocalDayIsRejectedDuringRestore() {
@@ -36,17 +36,17 @@ final class UpkeepLogTests: XCTestCase {
         store.addTask(TaskRecord(
             homeID: home.id,
             name: "Inspect roof",
-            startDay: LocalDay("2026-01-15"),
+            startDay: LocalDay("2026-01-15")!,
             recurrence: .oneTime,
             interval: 1
         ))
 
         XCTAssertEqual(
             store.occurrences(
-                from: LocalDay("2026-01-01"),
-                through: LocalDay("2027-01-01")
+                from: LocalDay("2026-01-01")!,
+                through: LocalDay("2027-01-01")!
             ).map(\.scheduledDay),
-            [LocalDay("2026-01-15")]
+            [LocalDay("2026-01-15")!]
         )
     }
 }

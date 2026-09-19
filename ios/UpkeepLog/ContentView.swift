@@ -71,7 +71,7 @@ private struct OccurrenceList: View {
         switch kind {
         case .due:
             return store.occurrences(
-                from: LocalDay("1900-01-01"),
+                from: LocalDay("1900-01-01")!,
                 through: today
             )
         case .upcoming:

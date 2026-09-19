@@ -210,7 +210,7 @@ final class UpkeepStore: ObservableObject {
     }
 
     private static func minorUnits(from text: String) -> Int? {
-        guard var value = Decimal(string: text, locale: .current) else { return nil }
+        guard let value = Decimal(string: text, locale: .current) else { return nil }
         var scaled = value * 100
         var rounded = Decimal()
         NSDecimalRound(&rounded, &scaled, 0, .plain)
@@ -244,11 +244,12 @@ final class UpkeepStore: ObservableObject {
             withIdentifiers: existing.map(\.identifier).filter { $0.hasPrefix("upkeep.") }
         )
         let end = LocalDay.today.adding(.year, value: 1)
-        for occurrence in occurrences(from: LocalDay.today, through: end).prefix(60) {
-            guard
-                let hour = occurrence.task.reminderHour,
-                let minute = occurrence.task.reminderMinute
-            else { continue }
+        let reminders = occurrences(from: LocalDay.today, through: end)
+            .filter { $0.task.reminderHour != nil && $0.task.reminderMinute != nil }
+            .prefix(60)
+        for occurrence in reminders {
+            guard let hour = occurrence.task.reminderHour,
+                  let minute = occurrence.task.reminderMinute else { continue }
             var components = occurrence.visibleDay.dateComponents
             components.calendar = Calendar.current
             components.timeZone = .current
