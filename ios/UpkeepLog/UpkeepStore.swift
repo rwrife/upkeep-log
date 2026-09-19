@@ -137,7 +137,21 @@ final class UpkeepStore: ObservableObject {
         })
         state.tasks
             .filter { !$0.isPaused }
-            .flatMap { task in scheduledDays(for: task, through: through).compactMap { day in
+            .flatMap { task in
+                let snoozedScheduledDays = state.snoozes.compactMap { key, visibleDay -> LocalDay? in
+                    guard
+                        key.hasPrefix("\(task.id.uuidString)-"),
+                        visibleDay >= from,
+                        visibleDay <= through
+                    else { return nil }
+                    return LocalDay(String(key.suffix(10)))
+                }
+                let lowerBound = min(snoozedScheduledDays.min() ?? from, from)
+                return scheduledDays(
+                    for: task,
+                    startingAt: lowerBound,
+                    through: through
+                ).compactMap { day in
                 let key = "\(task.id.uuidString)-\(day.rawValue)"
                 guard !completedKeys.contains(key) else { return nil }
                 let visible = state.snoozes[key] ?? day
@@ -170,6 +184,9 @@ final class UpkeepStore: ObservableObject {
             throw CocoaError(.fileReadTooLarge)
         }
         let imported = try decoder.decode(UpkeepState.self, from: Data(contentsOf: url))
+        guard imported.tasks.allSatisfy({ $0.interval > 0 }) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
         state = imported
         save()
         Task { await rebuildReminders() }
@@ -185,25 +202,47 @@ final class UpkeepStore: ObservableObject {
         }
     }
 
-    private func scheduledDays(for task: TaskRecord, through end: LocalDay) -> [LocalDay] {
+    private func scheduledDays(
+        for task: TaskRecord,
+        startingAt lowerBound: LocalDay,
+        through end: LocalDay
+    ) -> [LocalDay] {
         var result: [LocalDay] = []
         let maxOccurrences = 4_000
+        let interval = max(1, task.interval)
         var occurrenceIndex = 0
+        var generatedCount = 0
+        if task.recurrence == .days || task.recurrence == .weeks {
+            let stride = interval * (task.recurrence == .weeks ? 7 : 1)
+            let elapsed = max(0, Calendar(identifier: .gregorian).dateComponents(
+                [.day],
+                from: task.startDay.date,
+                to: lowerBound.date
+            ).day ?? 0)
+            occurrenceIndex = (elapsed + stride - 1) / stride
+        }
         var day = task.startDay
-        while day <= end, occurrenceIndex < maxOccurrences {
-            result.append(day)
-            occurrenceIndex += 1
+        while day <= end, generatedCount < maxOccurrences {
+            switch task.recurrence {
+            case .oneTime:
+                day = task.startDay
+            case .days:
+                day = task.startDay.adding(.day, value: interval * occurrenceIndex)
+            case .weeks:
+                day = task.startDay.adding(.day, value: interval * 7 * occurrenceIndex)
+            case .months:
+                day = task.startDay.addingMonths(interval * occurrenceIndex)
+            case .years:
+                day = task.startDay.addingMonths(interval * 12 * occurrenceIndex)
+            }
+            guard day <= end else { break }
+            if day >= lowerBound { result.append(day) }
+            generatedCount += 1
             switch task.recurrence {
             case .oneTime:
                 return result
-            case .days:
-                day = task.startDay.adding(.day, value: task.interval * occurrenceIndex)
-            case .weeks:
-                day = task.startDay.adding(.day, value: task.interval * 7 * occurrenceIndex)
-            case .months:
-                day = task.startDay.addingMonths(task.interval * occurrenceIndex)
-            case .years:
-                day = task.startDay.addingMonths(task.interval * 12 * occurrenceIndex)
+            default:
+                occurrenceIndex += 1
             }
         }
         return result
@@ -266,11 +305,5 @@ final class UpkeepStore: ObservableObject {
             )
             try? await center.add(request)
         }
-    }
-}
-
-private extension String {
-    var trimmed: String {
-        trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

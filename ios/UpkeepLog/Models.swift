@@ -22,6 +22,7 @@ struct LocalDay: Codable, Hashable, Comparable, Identifiable, CustomStringConver
     }
 
     static var today: LocalDay { LocalDay(date: Date()) }
+    static let distantPast = LocalDay("1900-01-01")!
 
     static func < (lhs: LocalDay, rhs: LocalDay) -> Bool {
         lhs.rawValue < rhs.rawValue
@@ -224,4 +225,10 @@ struct UpkeepState: Codable {
     var tasks: [TaskRecord] = []
     var completions: [CompletionRecord] = []
     var snoozes: [String: LocalDay] = [:]
+}
+
+extension String {
+    var trimmed: String {
+        trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }

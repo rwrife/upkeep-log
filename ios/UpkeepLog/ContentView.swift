@@ -71,7 +71,7 @@ private struct OccurrenceList: View {
         switch kind {
         case .due:
             return store.occurrences(
-                from: LocalDay("1900-01-01")!,
+                from: .distantPast,
                 through: today
             )
         case .upcoming:
@@ -144,6 +144,11 @@ private struct CompletionForm: View {
                 TextField("Notes", text: $notes, axis: .vertical)
                 TextField("Parts used", text: $parts, axis: .vertical)
                 TextField("Cost", text: $cost).keyboardType(.decimalPad)
+                if !cost.isEmpty && UpkeepStore.minorUnits(from: cost) == nil {
+                    Text("Enter a valid cost for your current region.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
                 TextField("Currency", text: $currency)
                     .textInputAutocapitalization(.characters)
             }
@@ -164,6 +169,7 @@ private struct CompletionForm: View {
                         )
                         dismiss()
                     }
+                    .disabled(!cost.isEmpty && UpkeepStore.minorUnits(from: cost) == nil)
                 }
             }
         }
@@ -554,11 +560,5 @@ private struct EmptyStateView<Actions: View>: View {
             actions
         }
         .padding(32)
-    }
-}
-
-private extension String {
-    var trimmed: String {
-        trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
