@@ -53,6 +53,12 @@ struct LocalDay: Codable, Hashable, Comparable, Identifiable, CustomStringConver
         return DateComponents(year: values[0], month: values[1], day: values[2])
     }
 
+    var localDate: Date {
+        var components = dateComponents
+        components.hour = 12
+        return Calendar.current.date(from: components) ?? Date()
+    }
+
     func adding(_ component: Calendar.Component, value: Int) -> LocalDay {
         LocalDay(date: Self.utcCalendar.date(
             byAdding: component,

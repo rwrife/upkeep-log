@@ -24,6 +24,30 @@ final class UpkeepLogTests: XCTestCase {
     }
 
     @MainActor
+    func testCostParsingUsesLocaleAndRoundsToMinorUnits() {
+        XCTAssertEqual(
+            UpkeepStore.minorUnits(
+                from: "12,345",
+                locale: Locale(identifier: "de_DE")
+            ),
+            1_235
+        )
+        XCTAssertEqual(
+            UpkeepStore.minorUnits(
+                from: "12.344",
+                locale: Locale(identifier: "en_US")
+            ),
+            1_234
+        )
+        XCTAssertNil(
+            UpkeepStore.minorUnits(
+                from: "not a cost",
+                locale: Locale(identifier: "en_US")
+            )
+        )
+    }
+
+    @MainActor
     func testOneTimeTaskCreatesOneOccurrence() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

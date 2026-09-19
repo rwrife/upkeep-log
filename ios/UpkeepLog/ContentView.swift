@@ -178,7 +178,7 @@ private struct SnoozeForm: View {
 
     init(occurrence: ScheduledOccurrence) {
         self.occurrence = occurrence
-        _date = State(initialValue: occurrence.visibleDay.adding(.day, value: 1).date)
+        _date = State(initialValue: occurrence.visibleDay.adding(.day, value: 1).localDate)
     }
 
     var body: some View {
@@ -187,7 +187,7 @@ private struct SnoozeForm: View {
                 DatePicker(
                     "Remind me on",
                     selection: $date,
-                    in: occurrence.scheduledDay.date...,
+                    in: occurrence.scheduledDay.localDate...,
                     displayedComponents: .date
                 )
             }

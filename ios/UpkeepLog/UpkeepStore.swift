@@ -209,8 +209,8 @@ final class UpkeepStore: ObservableObject {
         return result
     }
 
-    private static func minorUnits(from text: String) -> Int? {
-        guard let value = Decimal(string: text, locale: .current) else { return nil }
+    static func minorUnits(from text: String, locale: Locale = .current) -> Int? {
+        guard let value = Decimal(string: text, locale: locale) else { return nil }
         var scaled = value * 100
         var rounded = Decimal()
         NSDecimalRound(&rounded, &scaled, 0, .plain)
