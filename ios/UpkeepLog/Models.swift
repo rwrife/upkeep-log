@@ -1,0 +1,166 @@
+import Foundation
+
+struct LocalDay: Codable, Hashable, Comparable, Identifiable, CustomStringConvertible {
+    let rawValue: String
+
+    var id: String { rawValue }
+    var description: String { rawValue }
+
+    init(_ rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    init(date: Date, calendar: Calendar = .current) {
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        rawValue = String(
+            format: "%04d-%02d-%02d",
+            components.year ?? 1970,
+            components.month ?? 1,
+            components.day ?? 1
+        )
+    }
+
+    static var today: LocalDay { LocalDay(date: Date()) }
+
+    static func < (lhs: LocalDay, rhs: LocalDay) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+
+    var date: Date {
+        Self.formatter.date(from: rawValue) ?? Date(timeIntervalSince1970: 0)
+    }
+
+    func adding(_ component: Calendar.Component, value: Int) -> LocalDay {
+        LocalDay(date: Calendar(identifier: .gregorian).date(
+            byAdding: component,
+            value: value,
+            to: date
+        ) ?? date)
+    }
+
+    private static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+}
+
+struct HomeProfile: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var name: String
+    var address: String
+}
+
+struct RoomRecord: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var homeID: UUID
+    var name: String
+}
+
+struct AssetRecord: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var homeID: UUID
+    var roomID: UUID?
+    var name: String
+}
+
+enum RecurrenceKind: String, Codable, CaseIterable, Identifiable {
+    case oneTime
+    case days
+    case weeks
+    case months
+    case years
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .oneTime: "One time"
+        case .days: "Days"
+        case .weeks: "Weeks"
+        case .months: "Months"
+        case .years: "Years"
+        }
+    }
+}
+
+struct TaskRecord: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var homeID: UUID
+    var roomID: UUID?
+    var assetID: UUID?
+    var name: String
+    var startDay: LocalDay
+    var recurrence: RecurrenceKind
+    var interval: Int
+    var reminderHour: Int?
+    var reminderMinute: Int?
+    var isPaused = false
+
+    init(
+        id: UUID = UUID(),
+        homeID: UUID,
+        roomID: UUID? = nil,
+        assetID: UUID? = nil,
+        name: String,
+        startDay: LocalDay,
+        recurrence: RecurrenceKind,
+        interval: Int,
+        reminderHour: Int? = nil,
+        reminderMinute: Int? = nil,
+        isPaused: Bool = false
+    ) {
+        self.id = id
+        self.homeID = homeID
+        self.roomID = roomID
+        self.assetID = assetID
+        self.name = name
+        self.startDay = startDay
+        self.recurrence = recurrence
+        self.interval = interval
+        self.reminderHour = reminderHour
+        self.reminderMinute = reminderMinute
+        self.isPaused = isPaused
+    }
+}
+
+struct CompletionRevision: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var revisedAt = Date()
+    var actualDay: LocalDay
+    var notes: String
+    var parts: String
+    var costMinorUnits: Int?
+    var currency: String
+}
+
+struct CompletionRecord: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var taskID: UUID
+    var scheduledDay: LocalDay
+    var revisions: [CompletionRevision]
+
+    var latest: CompletionRevision {
+        revisions.last ?? CompletionRevision(actualDay: scheduledDay, notes: "", parts: "", currency: "USD")
+    }
+}
+
+struct ScheduledOccurrence: Identifiable, Hashable {
+    let task: TaskRecord
+    let scheduledDay: LocalDay
+    let visibleDay: LocalDay
+
+    var id: String { "\(task.id.uuidString)-\(scheduledDay.rawValue)" }
+}
+
+struct UpkeepState: Codable {
+    var homes: [HomeProfile] = []
+    var rooms: [RoomRecord] = []
+    var assets: [AssetRecord] = []
+    var tasks: [TaskRecord] = []
+    var completions: [CompletionRecord] = []
+    var snoozes: [String: LocalDay] = [:]
+}
